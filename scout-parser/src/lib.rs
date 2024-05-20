@@ -1,4 +1,6 @@
-use ast::{Program, StmtKind};
+use std::{collections::HashMap, hash::Hash};
+
+use ast::{HashLiteral, Identifier, Program, StmtKind};
 use scout_lexer::{Lexer, Token, TokenKind};
 
 pub mod ast;
@@ -56,6 +58,7 @@ impl Parser {
         }
     }
 
+    /// `goto "https://stackoverflow.com"`
     fn parse_goto_stmt(&mut self) -> ParseResult<StmtKind> {
         self.expect_peek(TokenKind::Str)?;
         let stmt = StmtKind::Goto(self.curr.literal.clone());
@@ -63,20 +66,25 @@ impl Parser {
         Ok(stmt)
     }
 
+    /// `scrape { body: ".body" }`
     fn parse_scrape_stmt(&mut self) -> ParseResult<StmtKind> {
         self.expect_peek(TokenKind::LBrace)?;
+        let body = self.parse_hash_literal()?;
+        self.next_token();
+        self.next_token();
+        Ok(StmtKind::Scrape(body))
+    }
+
+    /// `{ a: "b", c: "d" }`
+    fn parse_hash_literal(&mut self) -> ParseResult<HashLiteral> {
+        let pairs = HashMap::new();
         while self.peek.kind != TokenKind::RBrace {
-            match self.peek.kind {
-                TokenKind::Ident => {
-                    self.expect_peek(TokenKind::Colon)?;
-                    self.expect_peek(TokenKind::Str)?;
-                }
-                _ => return Err(ParseError::InvalidToken(self.peek.kind)),
-            };
+            self.expect_peek(TokenKind::Ident)?;
+            let ident = Identifier::new(self.curr.literal.clone());
+            self.expect_peek(TokenKind::Colon)?;
+            self.expect_peek(TokenKind::Str)?;
         }
-        self.next_token();
-        self.next_token();
-        Ok(StmtKind::Scrape)
+        Ok(HashLiteral { pairs })
     }
 }
 
@@ -101,8 +109,8 @@ mod tests {
     }
 
     #[test_case(r#"goto "foo""#, StmtKind::Goto("foo".into()))]
-    #[test_case("scrape {}", StmtKind::Scrape)]
-    #[test_case(r#"scrape { a: "b"}"#, StmtKind::Scrape)]
+    #[test_case("scrape {}", StmtKind::Scrape(HashLiteral::default()))]
+    #[test_case(r#"scrape { a: "b" }"#, StmtKind::Scrape(HashLiteral::default()))]
     fn test_single_stmt(input: &str, exp: StmtKind) {
         let stmt = extract_first_stmt(input);
         assert_eq!(stmt, exp);
