@@ -1,5 +1,12 @@
 use std::collections::HashMap;
 
+#[derive(Debug)]
+pub enum NodeKind {
+    Program(Program),
+    Stmt(StmtKind),
+    Expr(ExprKind),
+}
+
 #[derive(Debug, Default)]
 pub struct Program {
     pub stmts: Vec<StmtKind>,
@@ -36,4 +43,3 @@ impl From<Vec<(Identifier, String)>> for HashLiteral {
         Self { pairs }
     }
 }
-

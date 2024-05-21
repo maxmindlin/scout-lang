@@ -7,3 +7,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+scout-interpreter = { path = "./scout-interpreter/" }
+scout-lexer = { path = "./scout-lexer/" }
+scout-parser = { path = "./scout-parser/" }
+rustyline = "8.0.0"

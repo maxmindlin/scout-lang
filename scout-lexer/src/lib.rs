@@ -42,6 +42,7 @@ impl Lexer {
                     },
                     None => Token::new(Illegal, '|'.to_string()),
                 },
+                '$' => Token::new(DSign, c.to_string()),
                 _ if c.is_whitespace() => self.next_token(),
                 _ if c.is_numeric() => {
                     let lit = self.read_numeric();
