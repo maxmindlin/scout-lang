@@ -29,3 +29,11 @@ impl Identifier {
 pub struct HashLiteral {
     pub pairs: HashMap<Identifier, String>,
 }
+
+impl From<Vec<(Identifier, String)>> for HashLiteral {
+    fn from(value: Vec<(Identifier, String)>) -> Self {
+        let pairs = HashMap::from_iter(value.iter().map(|(i, s)| (i.clone(), s.clone())));
+        Self { pairs }
+    }
+}
+

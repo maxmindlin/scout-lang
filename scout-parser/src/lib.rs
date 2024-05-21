@@ -1,4 +1,4 @@
-use std::{collections::HashMap, hash::Hash};
+use std::collections::HashMap;
 
 use ast::{HashLiteral, Identifier, Program, StmtKind};
 use scout_lexer::{Lexer, Token, TokenKind};
@@ -76,13 +76,19 @@ impl Parser {
     }
 
     /// `{ a: "b", c: "d" }`
+    /// @TODO: allow expressions as values instead of strings
     fn parse_hash_literal(&mut self) -> ParseResult<HashLiteral> {
-        let pairs = HashMap::new();
+        let mut pairs = HashMap::new();
         while self.peek.kind != TokenKind::RBrace {
             self.expect_peek(TokenKind::Ident)?;
             let ident = Identifier::new(self.curr.literal.clone());
             self.expect_peek(TokenKind::Colon)?;
             self.expect_peek(TokenKind::Str)?;
+            let val = self.curr.literal.clone();
+            pairs.insert(ident, val);
+            if self.peek.kind == TokenKind::Comma {
+                self.next_token();
+            }
         }
         Ok(HashLiteral { pairs })
     }
@@ -110,10 +116,20 @@ mod tests {
 
     #[test_case(r#"goto "foo""#, StmtKind::Goto("foo".into()))]
     #[test_case("scrape {}", StmtKind::Scrape(HashLiteral::default()))]
-    #[test_case(r#"scrape { a: "b" }"#, StmtKind::Scrape(HashLiteral::default()))]
+    #[test_case(r#"scrape { a: "b" }"#, StmtKind::Scrape(HashLiteral::from(vec![(Identifier::new("a".into()), "b".into())])))]
+    #[test_case(
+        r#"scrape { a: "b", c: "d" }"#,
+        StmtKind::Scrape(
+            HashLiteral::from(
+                vec![
+                    (Identifier::new("a".into()), "b".into()),
+                    (Identifier::new("c".into()), "d".into())
+                ]
+            )
+        )
+    )]
     fn test_single_stmt(input: &str, exp: StmtKind) {
         let stmt = extract_first_stmt(input);
         assert_eq!(stmt, exp);
     }
 }
-
