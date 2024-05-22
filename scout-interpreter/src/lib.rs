@@ -1,14 +1,16 @@
-use std::collections::HashMap;
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crawler::Crawler;
 use object::Object;
-use scout_parser::ast::{ExprKind, HashLiteral, NodeKind, Program, StmtKind};
+use scout_parser::ast::{ExprKind, NodeKind, Program, StmtKind};
 
 pub mod builtin;
 pub mod crawler;
 pub mod object;
 
-pub fn eval(node: NodeKind, crawler: &mut Crawler) -> Object {
+pub(crate) type CrawlerPointer = Rc<RefCell<Crawler>>;
+
+pub fn eval<'a>(node: NodeKind, crawler: CrawlerPointer) -> Object<'a> {
     use NodeKind::*;
     match node {
         Program(p) => eval_program(p, crawler),
@@ -17,10 +19,10 @@ pub fn eval(node: NodeKind, crawler: &mut Crawler) -> Object {
     }
 }
 
-fn eval_program(prgm: Program, crawler: &mut Crawler) -> Object {
+fn eval_program<'a>(prgm: Program, crawler: CrawlerPointer) -> Object<'a> {
     let mut res = Object::Null;
     for stmt in prgm.stmts {
-        let val = eval_statement(&stmt, crawler);
+        let val = eval_statement(&stmt, Rc::clone(&crawler));
         match val {
             Object::Error => return val,
             _ => res = val,
@@ -29,24 +31,28 @@ fn eval_program(prgm: Program, crawler: &mut Crawler) -> Object {
     res
 }
 
-fn eval_statement(stmt: &StmtKind, crawler: &mut Crawler) -> Object {
+fn eval_statement<'a>(stmt: &StmtKind, crawler: CrawlerPointer) -> Object<'a> {
     match stmt {
         StmtKind::Goto(url) => {
-            crawler.goto(url.as_str()).unwrap();
+            crawler.borrow_mut().goto(url.as_str()).unwrap();
             Object::Null
         }
         StmtKind::Scrape(defs) => {
             let mut res = HashMap::new();
             for (id, def) in &defs.pairs {
-                let scrape_res = crawler.scrape(&def);
-                res.insert(id.clone(), scrape_res);
+                let val = eval_expression(def, Rc::clone(&crawler));
+                res.insert(id.clone(), val);
             }
-            let lit = HashLiteral { pairs: res };
-            Object::Map(lit)
+            Object::Map(res)
         }
     }
 }
 
-fn eval_expression(expr: &ExprKind, crawler: &mut Crawler) -> Object {
-    Object::Null
+fn eval_expression<'a>(expr: &ExprKind, crawler: CrawlerPointer) -> Object<'a> {
+    match expr {
+        ExprKind::Select(selector) => match crawler.borrow_mut().select(selector) {
+            Some(node) => Object::Node(node),
+            None => Object::Null,
+        },
+    }
 }

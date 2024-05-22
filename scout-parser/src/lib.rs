@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use ast::{HashLiteral, Identifier, Program, StmtKind};
+use ast::{ExprKind, HashLiteral, Identifier, Program, StmtKind};
 use scout_lexer::{Lexer, Token, TokenKind};
 
 pub mod ast;
@@ -83,9 +83,9 @@ impl Parser {
             self.expect_peek(TokenKind::Ident)?;
             let ident = Identifier::new(self.curr.literal.clone());
             self.expect_peek(TokenKind::Colon)?;
-            self.expect_peek(TokenKind::Str)?;
+            self.expect_peek(TokenKind::Select)?;
             let val = self.curr.literal.clone();
-            pairs.insert(ident, val);
+            pairs.insert(ident, ExprKind::Select(val));
             if self.peek.kind == TokenKind::Comma {
                 self.next_token();
             }
@@ -116,14 +116,23 @@ mod tests {
 
     #[test_case(r#"goto "foo""#, StmtKind::Goto("foo".into()))]
     #[test_case("scrape {}", StmtKind::Scrape(HashLiteral::default()))]
-    #[test_case(r#"scrape { a: "b" }"#, StmtKind::Scrape(HashLiteral::from(vec![(Identifier::new("a".into()), "b".into())])))]
     #[test_case(
-        r#"scrape { a: "b", c: "d" }"#,
+        r#"scrape { a: $"b" }"#,
         StmtKind::Scrape(
             HashLiteral::from(
                 vec![
-                    (Identifier::new("a".into()), "b".into()),
-                    (Identifier::new("c".into()), "d".into())
+                    (Identifier::new("a".into()), ExprKind::Select("b".into()))
+                ]
+            )
+        )
+    )]
+    #[test_case(
+        r#"scrape { a: $"b", c: $"d" }"#,
+        StmtKind::Scrape(
+            HashLiteral::from(
+                vec![
+                    (Identifier::new("a".into()), ExprKind::Select("b".into())),
+                    (Identifier::new("c".into()), ExprKind::Select("d".into()))
                 ]
             )
         )
@@ -133,3 +142,4 @@ mod tests {
         assert_eq!(stmt, exp);
     }
 }
+

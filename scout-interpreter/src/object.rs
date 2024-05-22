@@ -1,7 +1,13 @@
-use scout_parser::ast::HashLiteral;
+use std::collections::HashMap;
 
-pub enum Object {
+use scout_parser::ast::Identifier;
+use scraper::ElementRef;
+
+pub enum Object<'a> {
     Null,
     Error,
-    Map(HashLiteral),
+    Map(HashMap<Identifier, Object<'a>>),
+    Str(String),
+    Node(ElementRef<'a>),
 }
+

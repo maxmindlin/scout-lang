@@ -14,7 +14,7 @@ pub enum TokenKind {
     RParen,
     LBrace,
     RBrace,
-    DSign,
+    Select,
 
     // Keywords
     For,

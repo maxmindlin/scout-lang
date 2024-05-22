@@ -42,7 +42,17 @@ impl Lexer {
                     },
                     None => Token::new(Illegal, '|'.to_string()),
                 },
-                '$' => Token::new(DSign, c.to_string()),
+                '$' => match self.peek() {
+                    Some(c) => match *c {
+                        '"' => {
+                            let _ = self.next();
+                            let literal = self.read_string();
+                            Token::new(Select, literal)
+                        }
+                        _ => Token::new(Illegal, c.to_string()),
+                    },
+                    _ => Token::new(Illegal, '$'.to_string()),
+                },
                 _ if c.is_whitespace() => self.next_token(),
                 _ if c.is_numeric() => {
                     let lit = self.read_numeric();
@@ -133,6 +143,7 @@ mod tests {
     #[test_case("for x", vec!(Token::new(For, "for".into()), Token::new(Ident, "x".into())))]
     #[test_case("\"x\"", vec!(Token::new(Str, "x".into())))]
     #[test_case("|>", vec!(Token::new(Pipe, "|>".into())))]
+    #[test_case(r#"$".div" $"a""#, vec!(Token::new(Select, ".div".into()), Token::new(Select, "a".into())))]
     fn test_token(input: &str, exp: Vec<Token>) {
         let mut l = Lexer::new(input);
         for tt in exp.iter() {

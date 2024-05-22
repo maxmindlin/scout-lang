@@ -1,5 +1,5 @@
 use reqwest::Error;
-use scraper::{selectable::Selectable, Html, Selector};
+use scraper::{ElementRef, Html, Selector};
 
 #[derive(Default)]
 pub struct Crawler {
@@ -25,10 +25,14 @@ impl Crawler {
         Ok(())
     }
 
-    pub fn scrape(&self, selector: &str) -> String {
+    pub fn select(&self, selector: &str) -> Option<ElementRef<'_>> {
         let sel = Selector::parse(selector).unwrap();
         let elem = self.state.content.as_ref().unwrap().select(&sel).next();
-        match elem {
+        elem
+    }
+
+    pub fn scrape(&self, selector: &str) -> String {
+        match self.select(selector) {
             Some(e) => e.text().collect(),
             None => "".to_string(),
         }
