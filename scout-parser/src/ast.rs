@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::Display};
 
 #[derive(Debug)]
 pub enum NodeKind {
@@ -21,6 +21,7 @@ pub enum StmtKind {
 #[derive(Debug, PartialEq, Clone, Eq)]
 pub enum ExprKind {
     Select(String),
+    Call(Identifier, Vec<ExprKind>),
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
@@ -54,5 +55,11 @@ impl From<Vec<(Identifier, ExprKind)>> for HashLiteral {
     fn from(value: Vec<(Identifier, ExprKind)>) -> Self {
         let pairs = HashMap::from_iter(value.iter().map(|(i, s)| (i.clone(), s.clone())));
         Self { pairs }
+    }
+}
+
+impl Display for Identifier {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.name)
     }
 }

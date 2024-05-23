@@ -10,7 +10,7 @@ pub mod object;
 
 pub(crate) type CrawlerPointer = Rc<RefCell<Crawler>>;
 
-pub fn eval<'a>(node: NodeKind, crawler: CrawlerPointer) -> Object<'a> {
+pub fn eval(node: NodeKind, crawler: CrawlerPointer) -> Object {
     use NodeKind::*;
     match node {
         Program(p) => eval_program(p, crawler),
@@ -19,7 +19,7 @@ pub fn eval<'a>(node: NodeKind, crawler: CrawlerPointer) -> Object<'a> {
     }
 }
 
-fn eval_program<'a>(prgm: Program, crawler: CrawlerPointer) -> Object<'a> {
+fn eval_program(prgm: Program, crawler: CrawlerPointer) -> Object {
     let mut res = Object::Null;
     for stmt in prgm.stmts {
         let val = eval_statement(&stmt, Rc::clone(&crawler));
@@ -31,7 +31,7 @@ fn eval_program<'a>(prgm: Program, crawler: CrawlerPointer) -> Object<'a> {
     res
 }
 
-fn eval_statement<'a>(stmt: &StmtKind, crawler: CrawlerPointer) -> Object<'a> {
+fn eval_statement(stmt: &StmtKind, crawler: CrawlerPointer) -> Object {
     match stmt {
         StmtKind::Goto(url) => {
             crawler.borrow_mut().goto(url.as_str()).unwrap();
@@ -48,11 +48,12 @@ fn eval_statement<'a>(stmt: &StmtKind, crawler: CrawlerPointer) -> Object<'a> {
     }
 }
 
-fn eval_expression<'a>(expr: &ExprKind, crawler: CrawlerPointer) -> Object<'a> {
+fn eval_expression(expr: &ExprKind, crawler: CrawlerPointer) -> Object {
     match expr {
         ExprKind::Select(selector) => match crawler.borrow_mut().select(selector) {
-            Some(node) => Object::Node(node),
+            Some(node) => Object::Node(node.inner_html()),
             None => Object::Null,
         },
+        _ => unimplemented!(),
     }
 }

@@ -1,3 +1,5 @@
+use std::{cell::RefCell, rc::Rc};
+
 use rustyline::{error::ReadlineError, Editor};
 use scout_interpreter::{crawler::Crawler, eval};
 use scout_lexer::Lexer;
@@ -7,7 +9,8 @@ const PROMPT: &str = ">> ";
 
 pub fn run_repl() {
     let mut rl = Editor::<()>::new();
-    let mut crawler = Crawler::default();
+    let crawler = Crawler::default();
+    let crwl_pt = Rc::new(RefCell::new(crawler));
     if rl.load_history("history.txt").is_err() {
         println!("No previous history.");
     }
@@ -22,7 +25,8 @@ pub fn run_repl() {
                 let mut parser = Parser::new(lexer);
                 match parser.parse_program() {
                     Ok(prgm) => {
-                        eval(NodeKind::Program(prgm), &mut crawler);
+                        let obj = eval(NodeKind::Program(prgm), Rc::clone(&crwl_pt));
+                        println!("{}", obj);
                     }
                     Err(e) => println!("parser error: {:#?}", e),
                 }
@@ -43,3 +47,4 @@ pub fn run_repl() {
     }
     rl.save_history("history.txt").unwrap();
 }
+
