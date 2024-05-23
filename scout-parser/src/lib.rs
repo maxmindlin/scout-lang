@@ -70,27 +70,55 @@ impl Parser {
     fn parse_scrape_stmt(&mut self) -> ParseResult<StmtKind> {
         self.expect_peek(TokenKind::LBrace)?;
         let body = self.parse_hash_literal()?;
-        self.next_token();
-        self.next_token();
         Ok(StmtKind::Scrape(body))
     }
 
     /// `{ a: "b", c: "d" }`
     /// @TODO: allow expressions as values instead of strings
+    ///
+    /// Current token entering should be a LBrace
     fn parse_hash_literal(&mut self) -> ParseResult<HashLiteral> {
         let mut pairs = HashMap::new();
         while self.peek.kind != TokenKind::RBrace {
             self.expect_peek(TokenKind::Ident)?;
             let ident = Identifier::new(self.curr.literal.clone());
             self.expect_peek(TokenKind::Colon)?;
-            self.expect_peek(TokenKind::Select)?;
-            let val = self.curr.literal.clone();
-            pairs.insert(ident, ExprKind::Select(val));
+            self.next_token();
+            let val = self.parse_expr()?;
+            pairs.insert(ident, val);
             if self.peek.kind == TokenKind::Comma {
                 self.next_token();
             }
         }
+        self.next_token();
+        self.next_token();
         Ok(HashLiteral { pairs })
+    }
+
+    fn parse_expr(&mut self) -> ParseResult<ExprKind> {
+        let expr = match self.curr.kind {
+            TokenKind::Select => ExprKind::Select(self.curr.literal.clone()),
+            TokenKind::Ident => {
+                let ident = Identifier::new(self.curr.literal.clone());
+                match self.peek.kind {
+                    TokenKind::LParen => {
+                        self.next_token();
+                        let mut params = Vec::new();
+                        while self.peek.kind != TokenKind::RParen {
+                            self.next_token();
+                            let param = self.parse_expr()?;
+                            params.push(param);
+                        }
+                        self.next_token();
+                        self.next_token();
+                        Ok(ExprKind::Call(ident, params))
+                    }
+                    _ => return Err(ParseError::InvalidToken(self.curr.kind)),
+                }?
+            }
+            _ => return Err(ParseError::InvalidToken(self.curr.kind)),
+        };
+        Ok(expr)
     }
 }
 
@@ -142,4 +170,3 @@ mod tests {
         assert_eq!(stmt, exp);
     }
 }
-

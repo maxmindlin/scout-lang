@@ -54,6 +54,6 @@ fn eval_expression(expr: &ExprKind, crawler: CrawlerPointer) -> Object {
             Some(node) => Object::Node(node.inner_html()),
             None => Object::Null,
         },
-        _ => unimplemented!(),
+        _ => Object::Error,
     }
 }
