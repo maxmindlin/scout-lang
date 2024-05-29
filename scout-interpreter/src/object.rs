@@ -2,6 +2,7 @@ use std::{collections::HashMap, fmt::Display};
 
 use scout_parser::ast::Identifier;
 
+#[derive(Debug, PartialEq, Eq)]
 pub enum Object {
     Null,
     Error,
@@ -20,7 +21,7 @@ impl Display for Object {
             Map(hash) => {
                 write!(f, "{{")?;
                 for (i, o) in hash.iter() {
-                    write!(f, "{}: {}", i, o)?;
+                    write!(f, "{}: {} ", i, o)?;
                 }
                 write!(f, "}}")
             }

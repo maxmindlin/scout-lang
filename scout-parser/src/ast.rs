@@ -18,10 +18,14 @@ pub enum StmtKind {
     Scrape(HashLiteral),
 }
 
-#[derive(Debug, PartialEq, Clone, Eq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum ExprKind {
+    Str(String),
+    Number(f64),
+    Boolean(bool),
     Select(String),
     Call(Identifier, Vec<ExprKind>),
+    Chain(Vec<ExprKind>),
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
@@ -46,7 +50,7 @@ impl SelectLiteral {
     }
 }
 
-#[derive(Default, Debug, PartialEq, Eq, Clone)]
+#[derive(Default, Debug, PartialEq, Clone)]
 pub struct HashLiteral {
     pub pairs: HashMap<Identifier, ExprKind>,
 }

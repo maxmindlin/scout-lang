@@ -4,6 +4,8 @@ use crawler::Crawler;
 use object::Object;
 use scout_parser::ast::{ExprKind, NodeKind, Program, StmtKind};
 
+use crate::builtin::BuiltinKind;
+
 pub mod builtin;
 pub mod crawler;
 pub mod object;
@@ -54,6 +56,50 @@ fn eval_expression(expr: &ExprKind, crawler: CrawlerPointer) -> Object {
             Some(node) => Object::Node(node.inner_html()),
             None => Object::Null,
         },
+        ExprKind::Str(s) => Object::Str(s.to_owned()),
+        ExprKind::Call(ident, params) => {
+            let param_objs: Vec<Object> = params
+                .iter()
+                .map(|e| eval_expression(e, Rc::clone(&crawler)))
+                .collect();
+            if let Some(builtin) = BuiltinKind::is_from(&ident.name) {
+                builtin.apply(param_objs)
+            } else {
+                Object::Error
+            }
+        }
+        ExprKind::Chain(exprs) => {
+            let mut prev: Option<Object> = None;
+            for expr in exprs {
+                let eval = match expr {
+                    ExprKind::Call(ident, params) => {
+                        let mut obj_params: Vec<Object> = params
+                            .iter()
+                            .map(|e| eval_expression(e, Rc::clone(&crawler)))
+                            .collect();
+                        if let Some(obj) = prev {
+                            obj_params.insert(0, obj);
+                        }
+                        match BuiltinKind::is_from(&ident.name) {
+                            Some(builtin) => builtin.apply(obj_params),
+                            None => Object::Error,
+                        }
+                    }
+                    ExprKind::Select(selector) => match crawler.borrow_mut().select(selector) {
+                        Some(node) => Object::Node(node.inner_html()),
+                        None => Object::Null,
+                    },
+                    _ => Object::Error,
+                };
+
+                if eval == Object::Error {
+                    return eval;
+                }
+
+                prev = Some(eval);
+            }
+            prev.unwrap()
+        }
         _ => Object::Error,
     }
 }

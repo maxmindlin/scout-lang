@@ -9,3 +9,7 @@ edition = "2021"
 scout-parser = { path = "../scout-parser/" }
 reqwest = { version = "0.12", features = ["blocking"] }
 scraper = "0.19.0"
+
+[dev-dependencies]
+test-case = "*"
+scout-lexer = { path = "../scout-lexer/" }

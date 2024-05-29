@@ -95,30 +95,54 @@ impl Parser {
         Ok(HashLiteral { pairs })
     }
 
-    fn parse_expr(&mut self) -> ParseResult<ExprKind> {
-        let expr = match self.curr.kind {
-            TokenKind::Select => ExprKind::Select(self.curr.literal.clone()),
+    fn parse_single_expr(&mut self) -> ParseResult<ExprKind> {
+        match self.curr.kind {
             TokenKind::Ident => {
-                let ident = Identifier::new(self.curr.literal.clone());
+                // Parse multiple types of ident expressions
                 match self.peek.kind {
-                    TokenKind::LParen => {
-                        self.next_token();
-                        let mut params = Vec::new();
-                        while self.peek.kind != TokenKind::RParen {
-                            self.next_token();
-                            let param = self.parse_expr()?;
-                            params.push(param);
-                        }
-                        self.next_token();
-                        self.next_token();
-                        Ok(ExprKind::Call(ident, params))
-                    }
-                    _ => return Err(ParseError::InvalidToken(self.curr.kind)),
-                }?
+                    TokenKind::LParen => self.parse_call_expr(),
+                    _ => Err(ParseError::InvalidToken(self.peek.kind)),
+                }
             }
-            _ => return Err(ParseError::InvalidToken(self.curr.kind)),
-        };
-        Ok(expr)
+            TokenKind::Select => Ok(ExprKind::Select(self.curr.literal.clone())),
+            TokenKind::Str => Ok(ExprKind::Str(self.curr.literal.clone())),
+            _ => Err(ParseError::InvalidToken(self.curr.kind)),
+        }
+    }
+
+    fn parse_expr(&mut self) -> ParseResult<ExprKind> {
+        let expr = self.parse_single_expr()?;
+
+        if self.peek.kind == TokenKind::Pipe {
+            let mut exprs = vec![expr];
+
+            while self.peek.kind == TokenKind::Pipe {
+                self.next_token();
+                self.next_token();
+                let next_expr = self.parse_single_expr()?;
+                exprs.push(next_expr);
+            }
+
+            Ok(ExprKind::Chain(exprs))
+        } else {
+            Ok(expr)
+        }
+    }
+
+    fn parse_call_expr(&mut self) -> ParseResult<ExprKind> {
+        let ident = Identifier::new(self.curr.literal.clone());
+        self.next_token();
+        let mut params = Vec::new();
+        while self.peek.kind == TokenKind::Comma || self.peek.kind != TokenKind::RParen {
+            self.next_token();
+            let param = self.parse_expr()?;
+            params.push(param);
+        }
+
+        println!("{:?}", self.curr.kind);
+        self.expect_peek(TokenKind::RParen)?;
+        println!("{:?}", self.curr.kind);
+        Ok(ExprKind::Call(ident, params))
     }
 }
 
@@ -161,6 +185,40 @@ mod tests {
                 vec![
                     (Identifier::new("a".into()), ExprKind::Select("b".into())),
                     (Identifier::new("c".into()), ExprKind::Select("d".into()))
+                ]
+            )
+        )
+    )]
+    #[test_case(
+        r#"scrape { a: fn("a") }"#,
+        StmtKind::Scrape(
+            HashLiteral::from(
+                vec![
+                    (
+                        Identifier::new("a".into()),
+                        ExprKind::Call(
+                            Identifier::new("fn".into()), vec![ExprKind::Str("a".into())]
+                        )
+                    )
+                ]
+            )
+        )
+    )]
+    #[test_case(
+        r#"scrape { a: $"b" |> fn("a") }"#,
+        StmtKind::Scrape(
+            HashLiteral::from(
+                vec![
+                    (
+                        Identifier::new("a".into()),
+                        ExprKind::Chain(vec![
+                            ExprKind::Select("b".into()),
+                            ExprKind::Call(
+                                Identifier::new("fn".into()),
+                                vec![ExprKind::Str("a".into())]
+                            )
+                        ])
+                    )
                 ]
             )
         )
