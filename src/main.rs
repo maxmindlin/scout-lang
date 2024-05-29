@@ -1,10 +1,12 @@
 use std::{cell::RefCell, env, fs, rc::Rc};
 
+use print::pprint;
 use repl::run_repl;
 use scout_interpreter::{crawler::Crawler, eval};
 use scout_lexer::Lexer;
 use scout_parser::{ast::NodeKind, Parser};
 
+mod print;
 mod repl;
 
 fn main() {
@@ -20,7 +22,8 @@ fn main() {
             let mut parser = Parser::new(lex);
             match parser.parse_program() {
                 Ok(prgm) => {
-                    eval(NodeKind::Program(prgm), crwl_pt);
+                    let res = eval(NodeKind::Program(prgm), crwl_pt);
+                    pprint(res);
                 }
                 Err(e) => println!("parser error: {:#?}", e),
             }
@@ -28,4 +31,3 @@ fn main() {
         _ => panic!("unsupported number of args"),
     }
 }
-

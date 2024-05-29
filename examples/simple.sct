@@ -1,0 +1,9 @@
+goto "https://github.com/maxmindlin/scout-lang"
+scrape {
+    about: $".f4.my-3"
+        |> textContent()
+        |> trim(),
+    readme: $".markdown-body"
+        |> textContent()
+        |> trim()
+}

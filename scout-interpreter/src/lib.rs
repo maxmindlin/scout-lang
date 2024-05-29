@@ -37,7 +37,7 @@ fn eval_statement(stmt: &StmtKind, crawler: CrawlerPointer) -> Object {
     match stmt {
         StmtKind::Goto(url) => {
             crawler.borrow_mut().goto(url.as_str()).unwrap();
-            Object::Null
+            Object::Str(crawler.borrow().status().to_string())
         }
         StmtKind::Scrape(defs) => {
             let mut res = HashMap::new();
@@ -53,7 +53,7 @@ fn eval_statement(stmt: &StmtKind, crawler: CrawlerPointer) -> Object {
 fn eval_expression(expr: &ExprKind, crawler: CrawlerPointer) -> Object {
     match expr {
         ExprKind::Select(selector) => match crawler.borrow_mut().select(selector) {
-            Some(node) => Object::Node(node.inner_html()),
+            Some(node) => Object::Node(node.html()),
             None => Object::Null,
         },
         ExprKind::Str(s) => Object::Str(s.to_owned()),

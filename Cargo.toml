@@ -11,3 +11,4 @@ scout-interpreter = { path = "./scout-interpreter/" }
 scout-lexer = { path = "./scout-lexer/" }
 scout-parser = { path = "./scout-parser/" }
 rustyline = "8.0.0"
+colored = "2"

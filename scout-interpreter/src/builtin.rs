@@ -1,9 +1,12 @@
+use scraper::Html;
+
 use crate::object::Object;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum BuiltinKind {
     Print,
     TextContent,
+    Trim,
 }
 
 impl BuiltinKind {
@@ -12,6 +15,7 @@ impl BuiltinKind {
         match s {
             "print" => Some(Print),
             "textContent" => Some(TextContent),
+            "trim" => Some(Trim),
             _ => None,
         }
     }
@@ -20,12 +24,34 @@ impl BuiltinKind {
         use BuiltinKind::*;
         match self {
             Print => {
-                println!("{self:?}");
+                for obj in args {
+                    println!("{obj}");
+                }
                 Object::Null
             }
             TextContent => {
-                println!("{args:?}");
-                Object::Str("textContent".to_string())
+                if args.len() != 1 {
+                    return Object::Error;
+                }
+
+                if let Object::Node(html) = &args[0] {
+                    let doc = Html::parse_fragment(html);
+                    let txt = doc.root_element().text();
+                    Object::Str(txt.collect())
+                } else {
+                    Object::Error
+                }
+            }
+            Trim => {
+                if args.len() != 1 {
+                    return Object::Error;
+                }
+
+                if let Object::Str(s) = &args[0] {
+                    Object::Str(s.trim().to_owned())
+                } else {
+                    Object::Error
+                }
             }
         }
     }

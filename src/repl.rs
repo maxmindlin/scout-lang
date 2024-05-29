@@ -5,6 +5,8 @@ use scout_interpreter::{crawler::Crawler, eval};
 use scout_lexer::Lexer;
 use scout_parser::{ast::NodeKind, Parser};
 
+use crate::print::pprint;
+
 const PROMPT: &str = ">> ";
 
 pub fn run_repl() {
@@ -26,7 +28,7 @@ pub fn run_repl() {
                 match parser.parse_program() {
                     Ok(prgm) => {
                         let obj = eval(NodeKind::Program(prgm), Rc::clone(&crwl_pt));
-                        println!("{}", obj);
+                        pprint(obj);
                     }
                     Err(e) => println!("parser error: {:#?}", e),
                 }
@@ -47,4 +49,3 @@ pub fn run_repl() {
     }
     rl.save_history("history.txt").unwrap();
 }
-

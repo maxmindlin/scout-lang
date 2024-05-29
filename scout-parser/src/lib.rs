@@ -139,9 +139,7 @@ impl Parser {
             params.push(param);
         }
 
-        println!("{:?}", self.curr.kind);
         self.expect_peek(TokenKind::RParen)?;
-        println!("{:?}", self.curr.kind);
         Ok(ExprKind::Call(ident, params))
     }
 }
