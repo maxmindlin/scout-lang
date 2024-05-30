@@ -62,7 +62,6 @@ impl Parser {
     fn parse_goto_stmt(&mut self) -> ParseResult<StmtKind> {
         self.expect_peek(TokenKind::Str)?;
         let stmt = StmtKind::Goto(self.curr.literal.clone());
-        self.next_token();
         Ok(stmt)
     }
 
