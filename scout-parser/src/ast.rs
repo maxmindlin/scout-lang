@@ -16,6 +16,7 @@ pub struct Program {
 pub enum StmtKind {
     Goto(String),
     Scrape(HashLiteral),
+    Expr(ExprKind),
 }
 
 #[derive(Debug, PartialEq, Clone)]

@@ -2,7 +2,7 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crawler::Crawler;
 use object::Object;
-use scout_parser::ast::{ExprKind, NodeKind, Program, StmtKind};
+use scout_parser::ast::{ExprKind, Identifier, NodeKind, Program, StmtKind};
 
 use crate::builtin::BuiltinKind;
 
@@ -47,6 +47,26 @@ fn eval_statement(stmt: &StmtKind, crawler: CrawlerPointer) -> Object {
             }
             Object::Map(res)
         }
+        StmtKind::Expr(expr) => eval_expression(expr, Rc::clone(&crawler)),
+    }
+}
+
+fn apply_call(
+    ident: &Identifier,
+    params: &[ExprKind],
+    crawler: CrawlerPointer,
+    prev: Option<Object>,
+) -> Object {
+    let mut obj_params: Vec<Object> = params
+        .iter()
+        .map(|e| eval_expression(e, Rc::clone(&crawler)))
+        .collect();
+    if let Some(obj) = prev {
+        obj_params.insert(0, obj);
+    }
+    match BuiltinKind::is_from(&ident.name) {
+        Some(builtin) => builtin.apply(obj_params),
+        None => Object::Error,
     }
 }
 
@@ -57,33 +77,13 @@ fn eval_expression(expr: &ExprKind, crawler: CrawlerPointer) -> Object {
             None => Object::Null,
         },
         ExprKind::Str(s) => Object::Str(s.to_owned()),
-        ExprKind::Call(ident, params) => {
-            let param_objs: Vec<Object> = params
-                .iter()
-                .map(|e| eval_expression(e, Rc::clone(&crawler)))
-                .collect();
-            if let Some(builtin) = BuiltinKind::is_from(&ident.name) {
-                builtin.apply(param_objs)
-            } else {
-                Object::Error
-            }
-        }
+        ExprKind::Call(ident, params) => apply_call(ident, params, Rc::clone(&crawler), None),
         ExprKind::Chain(exprs) => {
             let mut prev: Option<Object> = None;
             for expr in exprs {
                 let eval = match expr {
                     ExprKind::Call(ident, params) => {
-                        let mut obj_params: Vec<Object> = params
-                            .iter()
-                            .map(|e| eval_expression(e, Rc::clone(&crawler)))
-                            .collect();
-                        if let Some(obj) = prev {
-                            obj_params.insert(0, obj);
-                        }
-                        match BuiltinKind::is_from(&ident.name) {
-                            Some(builtin) => builtin.apply(obj_params),
-                            None => Object::Error,
-                        }
+                        apply_call(ident, params, Rc::clone(&crawler), prev)
                     }
                     ExprKind::Select(selector) => match crawler.borrow_mut().select(selector) {
                         Some(node) => Object::Node(node.inner_html()),

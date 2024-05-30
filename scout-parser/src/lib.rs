@@ -54,7 +54,7 @@ impl Parser {
         match self.curr.kind {
             TokenKind::Goto => self.parse_goto_stmt(),
             TokenKind::Scrape => self.parse_scrape_stmt(),
-            _ => Err(ParseError::InvalidToken(self.curr.kind)),
+            _ => self.parse_expr_stmt(),
         }
     }
 
@@ -64,6 +64,11 @@ impl Parser {
         let stmt = StmtKind::Goto(self.curr.literal.clone());
         self.next_token();
         Ok(stmt)
+    }
+
+    fn parse_expr_stmt(&mut self) -> ParseResult<StmtKind> {
+        let expr = self.parse_expr()?;
+        Ok(StmtKind::Expr(expr))
     }
 
     /// `scrape { body: ".body" }`
