@@ -2,14 +2,22 @@ use std::{collections::HashMap, fmt::Display};
 
 use scout_parser::ast::Identifier;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub enum Object {
     Null,
     Error,
     Map(HashMap<Identifier, Object>),
     Str(String),
-    // @TODO: should contain the actual node, not a string
-    Node(String),
+    Node(fantoccini::elements::Element),
+}
+
+impl Object {
+    pub fn is_error(&self) -> bool {
+        match self {
+            Self::Error => true,
+            _ => false,
+        }
+    }
 }
 
 impl Display for Object {
@@ -26,7 +34,7 @@ impl Display for Object {
                 write!(f, "}}")
             }
             Str(s) => write!(f, "\"{}\"", s),
-            Node(_) => write!(f, "Node"),
+            Node(s) => write!(f, "Node"),
         }
     }
 }

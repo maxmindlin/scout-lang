@@ -1,7 +1,5 @@
-use std::{cell::RefCell, rc::Rc};
-
 use rustyline::{error::ReadlineError, Editor};
-use scout_interpreter::{crawler::Crawler, eval};
+use scout_interpreter::eval;
 use scout_lexer::Lexer;
 use scout_parser::{ast::NodeKind, Parser};
 
@@ -9,10 +7,12 @@ use crate::print::pprint;
 
 const PROMPT: &str = ">> ";
 
-pub fn run_repl() {
+pub async fn run_repl() {
     let mut rl = Editor::<()>::new();
-    let crawler = Crawler::default();
-    let crwl_pt = Rc::new(RefCell::new(crawler));
+    let crawler = fantoccini::ClientBuilder::native()
+        .connect("http://localhost:4444")
+        .await
+        .expect("error creating driver");
     if rl.load_history("history.txt").is_err() {
         println!("No previous history.");
     }
@@ -27,7 +27,7 @@ pub fn run_repl() {
                 let mut parser = Parser::new(lexer);
                 match parser.parse_program() {
                     Ok(prgm) => {
-                        let obj = eval(NodeKind::Program(prgm), Rc::clone(&crwl_pt));
+                        let obj = eval(NodeKind::Program(prgm), &crawler).await;
                         pprint(obj);
                     }
                     Err(e) => println!("parser error: {:#?}", e),

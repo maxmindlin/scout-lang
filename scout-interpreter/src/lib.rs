@@ -1,30 +1,27 @@
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
+use std::collections::HashMap;
 
-use crawler::Crawler;
+use futures::{future::BoxFuture, FutureExt};
 use object::Object;
 use scout_parser::ast::{ExprKind, Identifier, NodeKind, Program, StmtKind};
 
 use crate::builtin::BuiltinKind;
 
 pub mod builtin;
-pub mod crawler;
 pub mod object;
 
-pub(crate) type CrawlerPointer = Rc<RefCell<Crawler>>;
-
-pub fn eval(node: NodeKind, crawler: CrawlerPointer) -> Object {
+pub async fn eval(node: NodeKind, crawler: &fantoccini::Client) -> Object {
     use NodeKind::*;
     match node {
-        Program(p) => eval_program(p, crawler),
-        Stmt(s) => eval_statement(&s, crawler),
-        Expr(e) => eval_expression(&e, crawler),
+        Program(p) => eval_program(p, crawler).await,
+        Stmt(s) => eval_statement(&s, crawler).await,
+        Expr(e) => eval_expression(&e, crawler).await,
     }
 }
 
-fn eval_program(prgm: Program, crawler: CrawlerPointer) -> Object {
+async fn eval_program(prgm: Program, crawler: &fantoccini::Client) -> Object {
     let mut res = Object::Null;
     for stmt in prgm.stmts {
-        let val = eval_statement(&stmt, Rc::clone(&crawler));
+        let val = eval_statement(&stmt, crawler).await;
         match val {
             Object::Error => return val,
             _ => res = val,
@@ -33,69 +30,73 @@ fn eval_program(prgm: Program, crawler: CrawlerPointer) -> Object {
     res
 }
 
-fn eval_statement(stmt: &StmtKind, crawler: CrawlerPointer) -> Object {
+async fn eval_statement(stmt: &StmtKind, crawler: &fantoccini::Client) -> Object {
     match stmt {
         StmtKind::Goto(url) => {
-            crawler.borrow_mut().goto(url.as_str()).unwrap();
-            Object::Str(crawler.borrow().status().to_string())
+            crawler.goto(url.as_str()).await.unwrap();
+            Object::Null
         }
         StmtKind::Scrape(defs) => {
             let mut res = HashMap::new();
             for (id, def) in &defs.pairs {
-                let val = eval_expression(def, Rc::clone(&crawler));
+                let val = eval_expression(def, crawler).await;
                 res.insert(id.clone(), val);
             }
             Object::Map(res)
         }
-        StmtKind::Expr(expr) => eval_expression(expr, Rc::clone(&crawler)),
+        StmtKind::Expr(expr) => eval_expression(expr, crawler).await,
     }
 }
 
-fn apply_call(
-    ident: &Identifier,
-    params: &[ExprKind],
-    crawler: CrawlerPointer,
+fn apply_call<'a>(
+    ident: &'a Identifier,
+    params: &'a [ExprKind],
+    crawler: &'a fantoccini::Client,
     prev: Option<Object>,
-) -> Object {
-    let mut obj_params: Vec<Object> = params
-        .iter()
-        .map(|e| eval_expression(e, Rc::clone(&crawler)))
-        .collect();
-    if let Some(obj) = prev {
-        obj_params.insert(0, obj);
+) -> BoxFuture<'a, Object> {
+    async move {
+        let mut obj_params = Vec::new();
+        for param in params.iter() {
+            let expr = eval_expression(param, crawler).await;
+            obj_params.push(expr);
+        }
+        if let Some(obj) = prev {
+            obj_params.insert(0, obj);
+        }
+        match BuiltinKind::is_from(&ident.name) {
+            Some(builtin) => builtin.apply(obj_params).await,
+            None => Object::Error,
+        }
     }
-    match BuiltinKind::is_from(&ident.name) {
-        Some(builtin) => builtin.apply(obj_params),
-        None => Object::Error,
-    }
+    .boxed()
 }
 
-fn eval_expression(expr: &ExprKind, crawler: CrawlerPointer) -> Object {
+async fn eval_expression(expr: &ExprKind, crawler: &fantoccini::Client) -> Object {
     match expr {
-        ExprKind::Select(selector) => match crawler.borrow_mut().select(selector) {
-            Some(node) => Object::Node(node.html()),
-            None => Object::Null,
-        },
+        ExprKind::Select(selector) => {
+            match crawler.find(fantoccini::Locator::Css(selector)).await {
+                Ok(node) => Object::Node(node),
+                Err(_) => Object::Error,
+            }
+        }
         ExprKind::Str(s) => Object::Str(s.to_owned()),
-        ExprKind::Call(ident, params) => apply_call(ident, params, Rc::clone(&crawler), None),
+        ExprKind::Call(ident, params) => apply_call(ident, params, crawler, None).await,
         ExprKind::Chain(exprs) => {
             let mut prev: Option<Object> = None;
             for expr in exprs {
                 let eval = match expr {
-                    ExprKind::Call(ident, params) => {
-                        apply_call(ident, params, Rc::clone(&crawler), prev)
+                    ExprKind::Call(ident, params) => apply_call(ident, params, crawler, prev).await,
+                    ExprKind::Select(selector) => {
+                        match crawler.find(fantoccini::Locator::Css(selector)).await {
+                            Ok(node) => Object::Node(node),
+                            Err(_) => Object::Error,
+                        }
                     }
-                    ExprKind::Select(selector) => match crawler.borrow_mut().select(selector) {
-                        Some(node) => Object::Node(node.inner_html()),
-                        None => Object::Null,
-                    },
                     _ => Object::Error,
                 };
-
-                if eval == Object::Error {
+                if eval.is_error() {
                     return eval;
                 }
-
                 prev = Some(eval);
             }
             prev.unwrap()

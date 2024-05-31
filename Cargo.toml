@@ -12,3 +12,5 @@ scout-lexer = { path = "./scout-lexer/" }
 scout-parser = { path = "./scout-parser/" }
 rustyline = "8.0.0"
 colored = "2"
+fantoccini = "0.19.3"
+tokio = { version = "1", features = ["full"] }

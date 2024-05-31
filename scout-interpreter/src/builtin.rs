@@ -1,5 +1,3 @@
-use scraper::Html;
-
 use crate::object::Object;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -20,7 +18,7 @@ impl BuiltinKind {
         }
     }
 
-    pub fn apply(&self, args: Vec<Object>) -> Object {
+    pub async fn apply(&self, args: Vec<Object>) -> Object {
         use BuiltinKind::*;
         match self {
             Print => {
@@ -34,10 +32,8 @@ impl BuiltinKind {
                     return Object::Error;
                 }
 
-                if let Object::Node(html) = &args[0] {
-                    let doc = Html::parse_fragment(html);
-                    let txt = doc.root_element().text();
-                    Object::Str(txt.collect())
+                if let Object::Node(elem) = &args[0] {
+                    Object::Str(elem.text().await.unwrap())
                 } else {
                     Object::Error
                 }
