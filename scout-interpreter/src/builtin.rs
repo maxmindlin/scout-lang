@@ -4,6 +4,7 @@ use crate::object::Object;
 pub enum BuiltinKind {
     Print,
     TextContent,
+    Href,
     Trim,
 }
 
@@ -14,6 +15,7 @@ impl BuiltinKind {
             "print" => Some(Print),
             "textContent" => Some(TextContent),
             "trim" => Some(Trim),
+            "href" => Some(Href),
             _ => None,
         }
     }
@@ -34,6 +36,17 @@ impl BuiltinKind {
 
                 if let Object::Node(elem) = &args[0] {
                     Object::Str(elem.text().await.unwrap())
+                } else {
+                    Object::Error
+                }
+            }
+            Href => {
+                if args.len() != 1 {
+                    return Object::Error;
+                }
+
+                if let Object::Node(elem) = &args[0] {
+                    Object::Str(elem.prop("href").await.unwrap().unwrap_or("".into()))
                 } else {
                     Object::Error
                 }

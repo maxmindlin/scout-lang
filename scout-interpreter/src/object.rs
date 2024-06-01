@@ -34,7 +34,7 @@ impl Display for Object {
                 write!(f, "}}")
             }
             Str(s) => write!(f, "\"{}\"", s),
-            Node(s) => write!(f, "Node"),
+            Node(_) => write!(f, "Node"),
         }
     }
 }
