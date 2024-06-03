@@ -16,6 +16,7 @@ pub enum BuiltinKind {
     TextContent,
     Href,
     Trim,
+    Click,
 }
 
 impl BuiltinKind {
@@ -26,6 +27,7 @@ impl BuiltinKind {
             "textContent" => Some(TextContent),
             "trim" => Some(Trim),
             "href" => Some(Href),
+            "click" => Some(Click),
             _ => None,
         }
     }
@@ -53,6 +55,15 @@ impl BuiltinKind {
                     Ok(Arc::new(Object::Str(
                         elem.prop("href").await.unwrap().unwrap_or("".into()),
                     )))
+                } else {
+                    Err(EvalError::InvalidFnParams)
+                }
+            }
+            Click => {
+                assert_param_len!(args, 1);
+                if let Object::Node(elem) = &*args[0] {
+                    let _ = elem.click().await;
+                    Ok(Arc::new(Object::Null))
                 } else {
                     Err(EvalError::InvalidFnParams)
                 }
