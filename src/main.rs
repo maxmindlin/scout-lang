@@ -8,7 +8,6 @@ use scout_interpreter::{env::Env, eval};
 use scout_lexer::Lexer;
 use scout_parser::{ast::NodeKind, Parser};
 
-mod print;
 mod repl;
 
 #[tokio::main]
