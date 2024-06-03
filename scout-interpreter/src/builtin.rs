@@ -1,11 +1,11 @@
 use std::sync::Arc;
 
-use crate::object::Object;
+use crate::{object::Object, EvalError, EvalResult};
 
 macro_rules! assert_param_len {
     ($arg:expr, $len:expr) => {
         if $arg.len() != $len {
-            return Arc::new($crate::object::Object::Error);
+            return Err($crate::EvalError::InvalidFnParams);
         }
     };
 }
@@ -30,40 +30,41 @@ impl BuiltinKind {
         }
     }
 
-    pub async fn apply(&self, args: Vec<Arc<Object>>) -> Arc<Object> {
+    pub async fn apply(&self, args: Vec<Arc<Object>>) -> EvalResult {
         use BuiltinKind::*;
-        let out = match self {
+        match self {
             Print => {
                 for obj in args {
                     println!("{obj}");
                 }
-                Object::Null
+                Ok(Arc::new(Object::Null))
             }
             TextContent => {
                 assert_param_len!(args, 1);
                 if let Object::Node(elem) = &*args[0] {
-                    Object::Str(elem.text().await.unwrap())
+                    Ok(Arc::new(Object::Str(elem.text().await.unwrap())))
                 } else {
-                    Object::Error
+                    Err(EvalError::InvalidFnParams)
                 }
             }
             Href => {
                 assert_param_len!(args, 1);
                 if let Object::Node(elem) = &*args[0] {
-                    Object::Str(elem.prop("href").await.unwrap().unwrap_or("".into()))
+                    Ok(Arc::new(Object::Str(
+                        elem.prop("href").await.unwrap().unwrap_or("".into()),
+                    )))
                 } else {
-                    Object::Error
+                    Err(EvalError::InvalidFnParams)
                 }
             }
             Trim => {
                 assert_param_len!(args, 1);
                 if let Object::Str(s) = &*args[0] {
-                    Object::Str(s.trim().to_owned())
+                    Ok(Arc::new(Object::Str(s.trim().to_owned())))
                 } else {
-                    Object::Error
+                    Err(EvalError::InvalidFnParams)
                 }
             }
-        };
-        Arc::new(out)
+        }
     }
 }

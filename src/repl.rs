@@ -5,8 +5,6 @@ use scout_interpreter::{env::Env, eval};
 use scout_lexer::Lexer;
 use scout_parser::{ast::NodeKind, Parser};
 
-use crate::print::pprint;
-
 const PROMPT: &str = ">> ";
 
 pub async fn run_repl() {
@@ -31,7 +29,8 @@ pub async fn run_repl() {
                 match parser.parse_program() {
                     Ok(prgm) => {
                         let obj = eval(NodeKind::Program(prgm), &crawler, env.clone()).await;
-                        pprint(Arc::into_inner(obj).unwrap());
+                        println!("{:?}", obj);
+                        //pprint(Arc::into_inner(obj).unwrap());
                     }
                     Err(e) => println!("parser error: {:#?}", e),
                 }

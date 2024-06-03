@@ -5,17 +5,10 @@ use scout_parser::ast::Identifier;
 #[derive(Debug)]
 pub enum Object {
     Null,
-    Error,
     Map(HashMap<Identifier, Arc<Object>>),
     Str(String),
     Node(fantoccini::elements::Element),
     List(Vec<Arc<Object>>),
-}
-
-impl Object {
-    pub fn is_error(&self) -> bool {
-        matches!(self, Self::Error)
-    }
 }
 
 impl Display for Object {
@@ -23,7 +16,6 @@ impl Display for Object {
         use Object::*;
         match self {
             Null => write!(f, "Null"),
-            Error => write!(f, "Error"),
             Map(hash) => {
                 write!(f, "{{")?;
                 for (i, o) in hash.iter() {

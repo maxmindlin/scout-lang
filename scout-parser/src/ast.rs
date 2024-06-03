@@ -18,6 +18,7 @@ pub enum StmtKind {
     Scrape(HashLiteral),
     Expr(ExprKind),
     ForLoop(ForLoop),
+    Assign(Identifier, ExprKind),
 }
 
 #[derive(Debug, PartialEq, Clone)]

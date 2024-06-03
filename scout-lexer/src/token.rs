@@ -16,6 +16,7 @@ pub enum TokenKind {
     RBrace,
     Select,
     SelectAll,
+    Equal,
 
     // Keywords
     For,

@@ -3,7 +3,6 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use print::pprint;
 use repl::run_repl;
 use scout_interpreter::{env::Env, eval};
 use scout_lexer::Lexer;
@@ -30,7 +29,8 @@ async fn main() {
             match parser.parse_program() {
                 Ok(prgm) => {
                     let res = eval(NodeKind::Program(prgm), &crawler, env).await;
-                    pprint(Arc::into_inner(res).unwrap());
+                    println!("{:?}", res);
+                    // pprint(Arc::into_inner(res).unwrap());
                 }
                 Err(e) => println!("parser error: {:#?}", e),
             }

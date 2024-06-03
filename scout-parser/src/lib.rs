@@ -57,6 +57,16 @@ impl Parser {
             TokenKind::Goto => self.parse_goto_stmt(),
             TokenKind::Scrape => self.parse_scrape_stmt(),
             TokenKind::For => self.parse_for_loop(),
+            TokenKind::Ident => match self.peek.kind {
+                TokenKind::Equal => {
+                    let ident = Identifier::new(self.curr.literal.clone());
+                    self.next_token();
+                    self.next_token();
+                    let val = self.parse_expr()?;
+                    Ok(StmtKind::Assign(ident, val))
+                }
+                _ => self.parse_expr_stmt(),
+            },
             _ => self.parse_expr_stmt(),
         }
     }
@@ -273,6 +283,13 @@ mod tests {
             ForLoop::new(Identifier::new("node".into()), ExprKind::SelectAll("a".into()), Block::new(vec![
                 StmtKind::Expr(ExprKind::Select("a".into()))
             ]))
+        )
+    )]
+    #[test_case(
+        r#"x = "a""#,
+        StmtKind::Assign(
+            Identifier::new("x".into()),
+            ExprKind::Str("a".into())
         )
     )]
     fn test_single_stmt(input: &str, exp: StmtKind) {
