@@ -9,14 +9,12 @@ pub enum Object {
     Map(HashMap<Identifier, Object>),
     Str(String),
     Node(fantoccini::elements::Element),
+    List(Vec<Object>),
 }
 
 impl Object {
     pub fn is_error(&self) -> bool {
-        match self {
-            Self::Error => true,
-            _ => false,
-        }
+        matches!(self, Self::Error)
     }
 }
 
@@ -35,6 +33,13 @@ impl Display for Object {
             }
             Str(s) => write!(f, "\"{}\"", s),
             Node(_) => write!(f, "Node"),
+            List(objs) => {
+                write!(f, "[")?;
+                for obj in objs {
+                    write!(f, "{},", obj)?;
+                }
+                write!(f, "]")
+            }
         }
     }
 }

@@ -1,13 +1,28 @@
 use std::collections::HashMap;
 
+use fantoccini::Locator;
 use futures::{future::BoxFuture, FutureExt};
 use object::Object;
-use scout_parser::ast::{ExprKind, Identifier, NodeKind, Program, StmtKind};
+use scout_parser::ast::{Block, ExprKind, Identifier, NodeKind, Program, StmtKind};
 
 use crate::builtin::BuiltinKind;
 
 pub mod builtin;
+pub mod env;
 pub mod object;
+
+// TODO add parameters for better debugging.
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum EvalError {
+    TypeMismatch,
+    InvalidUsage,
+    InvalidFnParams,
+    NonFunction,
+    UnknownIdent,
+    UnknownPrefixOp,
+    UnknownInfixOp,
+    DuplicateDeclare,
+}
 
 pub async fn eval(node: NodeKind, crawler: &fantoccini::Client) -> Object {
     use NodeKind::*;
@@ -30,22 +45,50 @@ async fn eval_program(prgm: Program, crawler: &fantoccini::Client) -> Object {
     res
 }
 
-async fn eval_statement(stmt: &StmtKind, crawler: &fantoccini::Client) -> Object {
-    match stmt {
-        StmtKind::Goto(url) => {
-            crawler.goto(url.as_str()).await.unwrap();
-            Object::Null
-        }
-        StmtKind::Scrape(defs) => {
-            let mut res = HashMap::new();
-            for (id, def) in &defs.pairs {
-                let val = eval_expression(def, crawler).await;
-                res.insert(id.clone(), val);
+fn eval_statement<'a>(
+    stmt: &'a StmtKind,
+    crawler: &'a fantoccini::Client,
+) -> BoxFuture<'a, Object> {
+    async move {
+        match stmt {
+            StmtKind::Goto(url) => {
+                crawler.goto(url.as_str()).await.unwrap();
+                Object::Null
             }
-            Object::Map(res)
+            StmtKind::Scrape(defs) => {
+                let mut res = HashMap::new();
+                for (id, def) in &defs.pairs {
+                    let val = eval_expression(def, crawler).await;
+                    res.insert(id.clone(), val);
+                }
+                Object::Map(res)
+            }
+            StmtKind::Expr(expr) => eval_expression(expr, crawler).await,
+            StmtKind::ForLoop(floop) => {
+                let items = eval_expression(&floop.iterable, crawler).await;
+                match items {
+                    Object::List(objs) => {
+                        // @TODO add objs to env
+                        eval_block(&floop.block, crawler).await
+                    }
+                    _ => Object::Error,
+                }
+            }
         }
-        StmtKind::Expr(expr) => eval_expression(expr, crawler).await,
     }
+    .boxed()
+}
+
+async fn eval_block(block: &Block, crawler: &fantoccini::Client) -> Object {
+    let mut res = Object::Null;
+    for stmt in &block.stmts {
+        let val = eval_statement(stmt, crawler).await;
+        match val {
+            Object::Error => return val,
+            _ => res = val,
+        }
+    }
+    res
 }
 
 fn apply_call<'a>(
@@ -73,12 +116,14 @@ fn apply_call<'a>(
 
 async fn eval_expression(expr: &ExprKind, crawler: &fantoccini::Client) -> Object {
     match expr {
-        ExprKind::Select(selector) => {
-            match crawler.find(fantoccini::Locator::Css(selector)).await {
-                Ok(node) => Object::Node(node),
-                Err(_) => Object::Error,
-            }
-        }
+        ExprKind::Select(selector) => match crawler.find(Locator::Css(selector)).await {
+            Ok(node) => Object::Node(node),
+            Err(_) => Object::Error,
+        },
+        ExprKind::SelectAll(selector) => match crawler.find_all(Locator::Css(selector)).await {
+            Ok(nodes) => Object::List(nodes.iter().map(|e| Object::Node(e.clone())).collect()),
+            Err(_) => Object::Error,
+        },
         ExprKind::Str(s) => Object::Str(s.to_owned()),
         ExprKind::Call(ident, params) => apply_call(ident, params, crawler, None).await,
         ExprKind::Chain(exprs) => {

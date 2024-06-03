@@ -15,5 +15,6 @@ pub fn pprint(obj: Object) {
             }
             println!("{}", "}".green());
         }
+        Object::List(v) => println!("{:?}", v),
     }
 }

@@ -1,5 +1,13 @@
 use crate::object::Object;
 
+macro_rules! assert_param_len {
+    ($arg:expr, $len:expr) => {
+        if $arg != $len {
+            return $crate::object::Object::Null;
+        }
+    };
+}
+
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum BuiltinKind {
     Print,
@@ -30,10 +38,7 @@ impl BuiltinKind {
                 Object::Null
             }
             TextContent => {
-                if args.len() != 1 {
-                    return Object::Error;
-                }
-
+                assert_param_len!(args.len(), 1);
                 if let Object::Node(elem) = &args[0] {
                     Object::Str(elem.text().await.unwrap())
                 } else {
@@ -41,10 +46,7 @@ impl BuiltinKind {
                 }
             }
             Href => {
-                if args.len() != 1 {
-                    return Object::Error;
-                }
-
+                assert_param_len!(args.len(), 1);
                 if let Object::Node(elem) = &args[0] {
                     Object::Str(elem.prop("href").await.unwrap().unwrap_or("".into()))
                 } else {
@@ -52,10 +54,7 @@ impl BuiltinKind {
                 }
             }
             Trim => {
-                if args.len() != 1 {
-                    return Object::Error;
-                }
-
+                assert_param_len!(args.len(), 1);
                 if let Object::Str(s) = &args[0] {
                     Object::Str(s.trim().to_owned())
                 } else {

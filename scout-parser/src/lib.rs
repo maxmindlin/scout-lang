@@ -1,7 +1,9 @@
 use std::collections::HashMap;
 
-use ast::{ExprKind, HashLiteral, Identifier, Program, StmtKind};
+use ast::{ExprKind, ForLoop, HashLiteral, Identifier, Program, StmtKind};
 use scout_lexer::{Lexer, Token, TokenKind};
+
+use crate::ast::Block;
 
 pub mod ast;
 
@@ -54,8 +56,31 @@ impl Parser {
         match self.curr.kind {
             TokenKind::Goto => self.parse_goto_stmt(),
             TokenKind::Scrape => self.parse_scrape_stmt(),
+            TokenKind::For => self.parse_for_loop(),
             _ => self.parse_expr_stmt(),
         }
+    }
+
+    /// `for <ident> in <expr> do <block> end`
+    fn parse_for_loop(&mut self) -> ParseResult<StmtKind> {
+        self.expect_peek(TokenKind::Ident)?;
+        let ident = Identifier::new(self.curr.literal.clone());
+        self.expect_peek(TokenKind::In)?;
+        self.next_token();
+        let iterable = self.parse_expr()?;
+        self.expect_peek(TokenKind::Do)?;
+        let mut stmts = Vec::new();
+        self.next_token();
+        while self.curr.kind != TokenKind::End {
+            let stmt = self.parse_stmt()?;
+            stmts.push(stmt);
+            self.next_token();
+        }
+        let block = Block::new(stmts);
+
+        self.next_token();
+        let floop = ForLoop::new(ident, iterable, block);
+        Ok(StmtKind::ForLoop(floop))
     }
 
     /// `goto "https://stackoverflow.com"`
@@ -105,10 +130,11 @@ impl Parser {
                 // Parse multiple types of ident expressions
                 match self.peek.kind {
                     TokenKind::LParen => self.parse_call_expr(),
-                    _ => Err(ParseError::InvalidToken(self.peek.kind)),
+                    _ => Ok(ExprKind::Ident(Identifier::new(self.curr.literal.clone()))),
                 }
             }
             TokenKind::Select => Ok(ExprKind::Select(self.curr.literal.clone())),
+            TokenKind::SelectAll => Ok(ExprKind::SelectAll(self.curr.literal.clone())),
             TokenKind::Str => Ok(ExprKind::Str(self.curr.literal.clone())),
             _ => Err(ParseError::InvalidToken(self.curr.kind)),
         }
@@ -192,6 +218,16 @@ mod tests {
         )
     )]
     #[test_case(
+        r#"scrape { a: $$"b" }"#,
+        StmtKind::Scrape(
+            HashLiteral::from(
+                vec![
+                    (Identifier::new("a".into()), ExprKind::SelectAll("b".into())),
+                ]
+            )
+        )
+    )]
+    #[test_case(
         r#"scrape { a: fn("a") }"#,
         StmtKind::Scrape(
             HashLiteral::from(
@@ -223,6 +259,20 @@ mod tests {
                     )
                 ]
             )
+        )
+    )]
+    #[test_case(
+        r#"for node in $$"a" do end"#,
+        StmtKind::ForLoop(
+            ForLoop::new(Identifier::new("node".into()), ExprKind::SelectAll("a".into()), Block::new(vec![]))
+        )
+    )]
+    #[test_case(
+        r#"for node in $$"a" do $"a" end"#,
+        StmtKind::ForLoop(
+            ForLoop::new(Identifier::new("node".into()), ExprKind::SelectAll("a".into()), Block::new(vec![
+                StmtKind::Expr(ExprKind::Select("a".into()))
+            ]))
         )
     )]
     fn test_single_stmt(input: &str, exp: StmtKind) {

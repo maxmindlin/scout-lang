@@ -17,6 +17,7 @@ pub enum StmtKind {
     Goto(String),
     Scrape(HashLiteral),
     Expr(ExprKind),
+    ForLoop(ForLoop),
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -25,6 +26,8 @@ pub enum ExprKind {
     Number(f64),
     Boolean(bool),
     Select(String),
+    Ident(Identifier),
+    SelectAll(String),
     Call(Identifier, Vec<ExprKind>),
     Chain(Vec<ExprKind>),
 }
@@ -66,5 +69,33 @@ impl From<Vec<(Identifier, ExprKind)>> for HashLiteral {
 impl Display for Identifier {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.name)
+    }
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct ForLoop {
+    pub ident: Identifier,
+    pub iterable: ExprKind,
+    pub block: Block,
+}
+
+impl ForLoop {
+    pub fn new(ident: Identifier, iterable: ExprKind, block: Block) -> Self {
+        Self {
+            ident,
+            iterable,
+            block,
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Clone, Default)]
+pub struct Block {
+    pub stmts: Vec<StmtKind>,
+}
+
+impl Block {
+    pub fn new(stmts: Vec<StmtKind>) -> Self {
+        Self { stmts }
     }
 }

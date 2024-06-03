@@ -15,6 +15,7 @@ pub enum TokenKind {
     LBrace,
     RBrace,
     Select,
+    SelectAll,
 
     // Keywords
     For,
