@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::Display};
+use std::{collections::HashMap, fmt::Display, sync::Arc};
 
 use scout_parser::ast::Identifier;
 
@@ -6,10 +6,10 @@ use scout_parser::ast::Identifier;
 pub enum Object {
     Null,
     Error,
-    Map(HashMap<Identifier, Object>),
+    Map(HashMap<Identifier, Arc<Object>>),
     Str(String),
     Node(fantoccini::elements::Element),
-    List(Vec<Object>),
+    List(Vec<Arc<Object>>),
 }
 
 impl Object {
@@ -33,13 +33,7 @@ impl Display for Object {
             }
             Str(s) => write!(f, "\"{}\"", s),
             Node(_) => write!(f, "Node"),
-            List(objs) => {
-                write!(f, "[")?;
-                for obj in objs {
-                    write!(f, "{},", obj)?;
-                }
-                write!(f, "]")
-            }
+            List(objs) => write!(f, "[Node; {}]", objs.len()),
         }
     }
 }

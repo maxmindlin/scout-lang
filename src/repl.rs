@@ -1,5 +1,7 @@
+use std::sync::{Arc, Mutex};
+
 use rustyline::{error::ReadlineError, Editor};
-use scout_interpreter::eval;
+use scout_interpreter::{env::Env, eval};
 use scout_lexer::Lexer;
 use scout_parser::{ast::NodeKind, Parser};
 
@@ -13,6 +15,7 @@ pub async fn run_repl() {
         .connect("http://localhost:4444")
         .await
         .expect("error creating driver");
+    let env = Arc::new(Mutex::new(Env::default()));
     if rl.load_history("history.txt").is_err() {
         println!("No previous history.");
     }
@@ -27,8 +30,8 @@ pub async fn run_repl() {
                 let mut parser = Parser::new(lexer);
                 match parser.parse_program() {
                     Ok(prgm) => {
-                        let obj = eval(NodeKind::Program(prgm), &crawler).await;
-                        pprint(obj);
+                        let obj = eval(NodeKind::Program(prgm), &crawler, env.clone()).await;
+                        pprint(Arc::into_inner(obj).unwrap());
                     }
                     Err(e) => println!("parser error: {:#?}", e),
                 }

@@ -1,8 +1,11 @@
-use std::{env, fs};
+use std::{
+    env, fs,
+    sync::{Arc, Mutex},
+};
 
 use print::pprint;
 use repl::run_repl;
-use scout_interpreter::eval;
+use scout_interpreter::{env::Env, eval};
 use scout_lexer::Lexer;
 use scout_parser::{ast::NodeKind, Parser};
 
@@ -23,10 +26,11 @@ async fn main() {
                 .expect("error creating driver");
             let lex = Lexer::new(&contents);
             let mut parser = Parser::new(lex);
+            let env = Arc::new(Mutex::new(Env::default()));
             match parser.parse_program() {
                 Ok(prgm) => {
-                    let res = eval(NodeKind::Program(prgm), &crawler).await;
-                    pprint(res);
+                    let res = eval(NodeKind::Program(prgm), &crawler, env).await;
+                    pprint(Arc::into_inner(res).unwrap());
                 }
                 Err(e) => println!("parser error: {:#?}", e),
             }

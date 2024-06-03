@@ -1,9 +1,11 @@
+use std::sync::Arc;
+
 use crate::object::Object;
 
 macro_rules! assert_param_len {
     ($arg:expr, $len:expr) => {
-        if $arg != $len {
-            return $crate::object::Object::Null;
+        if $arg.len() != $len {
+            return Arc::new($crate::object::Object::Error);
         }
     };
 }
@@ -28,9 +30,9 @@ impl BuiltinKind {
         }
     }
 
-    pub async fn apply(&self, args: Vec<Object>) -> Object {
+    pub async fn apply(&self, args: Vec<Arc<Object>>) -> Arc<Object> {
         use BuiltinKind::*;
-        match self {
+        let out = match self {
             Print => {
                 for obj in args {
                     println!("{obj}");
@@ -38,29 +40,30 @@ impl BuiltinKind {
                 Object::Null
             }
             TextContent => {
-                assert_param_len!(args.len(), 1);
-                if let Object::Node(elem) = &args[0] {
+                assert_param_len!(args, 1);
+                if let Object::Node(elem) = &*args[0] {
                     Object::Str(elem.text().await.unwrap())
                 } else {
                     Object::Error
                 }
             }
             Href => {
-                assert_param_len!(args.len(), 1);
-                if let Object::Node(elem) = &args[0] {
+                assert_param_len!(args, 1);
+                if let Object::Node(elem) = &*args[0] {
                     Object::Str(elem.prop("href").await.unwrap().unwrap_or("".into()))
                 } else {
                     Object::Error
                 }
             }
             Trim => {
-                assert_param_len!(args.len(), 1);
-                if let Object::Str(s) = &args[0] {
+                assert_param_len!(args, 1);
+                if let Object::Str(s) = &*args[0] {
                     Object::Str(s.trim().to_owned())
                 } else {
                     Object::Error
                 }
             }
-        }
+        };
+        Arc::new(out)
     }
 }
