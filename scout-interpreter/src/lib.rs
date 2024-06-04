@@ -98,9 +98,7 @@ fn eval_statement<'a>(
 async fn eval_block(block: &Block, crawler: &fantoccini::Client, env: EnvPointer) -> EvalResult {
     let mut res = Arc::new(Object::Null);
     for stmt in &block.stmts {
-        res = eval_statement(stmt, crawler, Arc::clone(&env))
-            .await?
-            .clone();
+        res = eval_statement(stmt, crawler, env.clone()).await?.clone();
     }
     Ok(res)
 }

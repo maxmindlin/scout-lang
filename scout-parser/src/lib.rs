@@ -130,7 +130,6 @@ impl Parser {
             }
         }
         self.next_token();
-        self.next_token();
         Ok(HashLiteral { pairs })
     }
 
@@ -290,6 +289,14 @@ mod tests {
         StmtKind::Assign(
             Identifier::new("x".into()),
             ExprKind::Str("a".into())
+        )
+    )]
+    #[test_case(
+        r#"for node in $$"a" do scrape {} end"#,
+        StmtKind::ForLoop(
+            ForLoop::new(Identifier::new("node".into()), ExprKind::SelectAll("a".into()), Block::new(vec![
+                StmtKind::Scrape(HashLiteral::default())
+            ]))
         )
     )]
     fn test_single_stmt(input: &str, exp: StmtKind) {
