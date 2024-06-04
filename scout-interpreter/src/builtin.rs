@@ -46,14 +46,14 @@ impl BuiltinKind {
             }
             TextContent => {
                 assert_param_len!(args, 1);
-                apply_elem_fn(&*args[0], |elem| {
+                apply_elem_fn(&args[0], |elem| {
                     async move { Object::Str(elem.text().await.unwrap_or("".into())) }.boxed()
                 })
                 .await
             }
             Href => {
                 assert_param_len!(args, 1);
-                apply_elem_fn(&*args[0], |elem| {
+                apply_elem_fn(&args[0], |elem| {
                     async move {
                         Object::Str(
                             elem.prop("href")

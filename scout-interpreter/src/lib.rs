@@ -214,14 +214,14 @@ fn eval_expression<'a>(
         match expr {
             ExprKind::Select(selector) => match crawler.find(Locator::Css(selector)).await {
                 Ok(node) => {
-                    apply_debug_border(&crawler, &selector).await;
+                    apply_debug_border(crawler, selector).await;
                     Ok(Arc::new(Object::Node(node)))
                 }
                 Err(_) => Ok(Arc::new(Object::Null)),
             },
             ExprKind::SelectAll(selector) => match crawler.find_all(Locator::Css(selector)).await {
                 Ok(nodes) => {
-                    apply_debug_border_all(&crawler, &selector).await;
+                    apply_debug_border_all(crawler, selector).await;
                     let elems = nodes
                         .iter()
                         .map(|e| Arc::new(Object::Node(e.clone())))
