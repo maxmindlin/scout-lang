@@ -25,6 +25,7 @@ pub enum TokenKind {
     End,
     Goto,
     Scrape,
+    Screenshot,
 }
 
 impl TokenKind {
@@ -37,6 +38,7 @@ impl TokenKind {
             "end" => Some(End),
             "goto" => Some(Goto),
             "scrape" => Some(Scrape),
+            "screenshot" => Some(Screenshot),
             _ => None,
         }
     }

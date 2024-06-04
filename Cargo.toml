@@ -14,3 +14,4 @@ rustyline = "8.0.0"
 colored = "2"
 fantoccini = "0.19.3"
 tokio = { version = "1", features = ["full"] }
+serde_json = "1.0"

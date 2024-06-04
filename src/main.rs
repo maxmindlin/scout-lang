@@ -5,7 +5,7 @@ use std::{
 };
 
 use repl::run_repl;
-use scout_interpreter::{env::Env, eval};
+use scout_interpreter::{env::Env, eval, ScrapeResultsPtr};
 use scout_lexer::Lexer;
 use scout_parser::{ast::NodeKind, Parser};
 
@@ -14,9 +14,10 @@ mod repl;
 async fn run(
     args: Vec<String>,
     crawler: &fantoccini::Client,
+    results: ScrapeResultsPtr,
 ) -> Result<(), Box<dyn std::error::Error>> {
     match args.len() {
-        1 => run_repl(crawler).await,
+        1 => run_repl(crawler, results).await,
         2 => {
             let filename = &args[1];
             let contents = fs::read_to_string(filename)?;
@@ -26,7 +27,7 @@ async fn run(
             let env = Arc::new(Mutex::new(Env::default()));
             match parser.parse_program() {
                 Ok(prgm) => {
-                    let res = eval(NodeKind::Program(prgm), crawler, env).await;
+                    let res = eval(NodeKind::Program(prgm), crawler, env, results).await;
                     println!("{:?}", res);
                     Ok(())
                     // pprint(Arc::into_inner(res).unwrap());
@@ -49,10 +50,14 @@ async fn main() {
         .connect("http://localhost:4444")
         .await
         .expect("error starting browser");
+
+    let results = ScrapeResultsPtr::default();
     let args: Vec<String> = env::args().collect();
-    if let Err(e) = run(args, &crawler).await {
+    if let Err(e) = run(args, &crawler, results.clone()).await {
         println!("Error: {}", e);
     }
+    let json_results = results.lock().unwrap().to_json();
+    println!("Scrape results:\n\n{}\n", json_results);
     let _ = crawler.close().await;
 
     #[cfg(target_os = "windows")]

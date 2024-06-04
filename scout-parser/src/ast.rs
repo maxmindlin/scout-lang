@@ -19,6 +19,7 @@ pub enum StmtKind {
     Expr(ExprKind),
     ForLoop(ForLoop),
     Assign(Identifier, ExprKind),
+    Screenshot(String),
 }
 
 #[derive(Debug, PartialEq, Clone)]

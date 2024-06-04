@@ -57,6 +57,7 @@ impl Parser {
             TokenKind::Goto => self.parse_goto_stmt(),
             TokenKind::Scrape => self.parse_scrape_stmt(),
             TokenKind::For => self.parse_for_loop(),
+            TokenKind::Screenshot => self.parse_screenshot_stmt(),
             TokenKind::Ident => match self.peek.kind {
                 TokenKind::Equal => {
                     let ident = Identifier::new(self.curr.literal.clone());
@@ -97,6 +98,13 @@ impl Parser {
     fn parse_goto_stmt(&mut self) -> ParseResult<StmtKind> {
         self.expect_peek(TokenKind::Str)?;
         let stmt = StmtKind::Goto(self.curr.literal.clone());
+        Ok(stmt)
+    }
+
+    /// `screenshot "screenshot.png"`
+    fn parse_screenshot_stmt(&mut self) -> ParseResult<StmtKind> {
+        self.expect_peek(TokenKind::Str)?;
+        let stmt = StmtKind::Screenshot(self.curr.literal.clone());
         Ok(stmt)
     }
 

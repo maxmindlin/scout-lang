@@ -1,13 +1,16 @@
 use std::sync::{Arc, Mutex};
 
 use rustyline::{error::ReadlineError, Editor};
-use scout_interpreter::{env::Env, eval};
+use scout_interpreter::{env::Env, eval, ScrapeResultsPtr};
 use scout_lexer::Lexer;
 use scout_parser::{ast::NodeKind, Parser};
 
 const PROMPT: &str = ">> ";
 
-pub async fn run_repl(crawler: &fantoccini::Client) -> Result<(), Box<dyn std::error::Error>> {
+pub async fn run_repl(
+    crawler: &fantoccini::Client,
+    results: ScrapeResultsPtr,
+) -> Result<(), Box<dyn std::error::Error>> {
     let mut rl = Editor::<()>::new();
     let env = Arc::new(Mutex::new(Env::default()));
     if rl.load_history("history.txt").is_err() {
@@ -24,7 +27,13 @@ pub async fn run_repl(crawler: &fantoccini::Client) -> Result<(), Box<dyn std::e
                 let mut parser = Parser::new(lexer);
                 match parser.parse_program() {
                     Ok(prgm) => {
-                        let obj = eval(NodeKind::Program(prgm), crawler, env.clone()).await;
+                        let obj = eval(
+                            NodeKind::Program(prgm),
+                            crawler,
+                            env.clone(),
+                            results.clone(),
+                        )
+                        .await;
                         println!("{:?}", obj);
                         //pprint(Arc::into_inner(obj).unwrap());
                     }

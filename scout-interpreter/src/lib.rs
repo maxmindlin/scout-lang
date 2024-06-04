@@ -6,8 +6,10 @@ use std::{
 use env::EnvPointer;
 use fantoccini::Locator;
 use futures::{future::BoxFuture, FutureExt};
-use object::Object;
+use object::{obj_map_to_json, Object};
 use scout_parser::ast::{Block, ExprKind, Identifier, NodeKind, Program, StmtKind};
+use serde::{Deserialize, Serialize};
+use serde_json::{json, Map, Value};
 
 use crate::{builtin::BuiltinKind, env::Env};
 
@@ -16,6 +18,22 @@ pub mod env;
 pub mod object;
 
 pub type EvalResult = Result<Arc<Object>, EvalError>;
+pub type ScrapeResultsPtr = Arc<Mutex<ScrapeResults>>;
+
+#[derive(Default, Serialize, Deserialize, Debug)]
+pub struct ScrapeResults {
+    results: Vec<Map<String, Value>>,
+}
+
+impl ScrapeResults {
+    pub fn add_result(&mut self, res: Map<String, Value>) {
+        self.results.push(res);
+    }
+
+    pub fn to_json(&self) -> String {
+        serde_json::to_string_pretty(self).unwrap()
+    }
+}
 
 // TODO add parameters for better debugging.
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -24,27 +42,42 @@ pub enum EvalError {
     InvalidUsage,
     InvalidFnParams,
     InvalidExpr,
+    InvalidUrl,
     NonFunction,
     UnknownIdent,
     UnknownPrefixOp,
     UnknownInfixOp,
     DuplicateDeclare,
     NonIterable,
+    ScreenshotError,
+    BrowserError,
 }
 
-pub async fn eval(node: NodeKind, crawler: &fantoccini::Client, env: EnvPointer) -> EvalResult {
+pub async fn eval(
+    node: NodeKind,
+    crawler: &fantoccini::Client,
+    env: EnvPointer,
+    results: ScrapeResultsPtr,
+) -> EvalResult {
     use NodeKind::*;
     match node {
-        Program(p) => eval_program(p, crawler, env.clone()).await,
-        Stmt(s) => eval_statement(&s, crawler, env.clone()).await,
+        Program(p) => eval_program(p, crawler, env.clone(), results.clone()).await,
+        Stmt(s) => eval_statement(&s, crawler, env.clone(), results.clone()).await,
         Expr(e) => eval_expression(&e, crawler, env.clone()).await,
     }
 }
 
-async fn eval_program(prgm: Program, crawler: &fantoccini::Client, env: EnvPointer) -> EvalResult {
+async fn eval_program(
+    prgm: Program,
+    crawler: &fantoccini::Client,
+    env: EnvPointer,
+    results: ScrapeResultsPtr,
+) -> EvalResult {
     let mut res = Arc::new(Object::Null);
     for stmt in prgm.stmts {
-        res = eval_statement(&stmt, crawler, env.clone()).await?.clone();
+        res = eval_statement(&stmt, crawler, env.clone(), results.clone())
+            .await?
+            .clone();
     }
     Ok(res)
 }
@@ -53,11 +86,14 @@ fn eval_statement<'a>(
     stmt: &'a StmtKind,
     crawler: &'a fantoccini::Client,
     env: EnvPointer,
+    results: ScrapeResultsPtr,
 ) -> BoxFuture<'a, EvalResult> {
     async move {
         match stmt {
             StmtKind::Goto(url) => {
-                crawler.goto(url.as_str()).await.unwrap();
+                if crawler.goto(url.as_str()).await.is_err() {
+                    return Err(EvalError::InvalidUrl);
+                };
                 Ok(Arc::new(Object::Null))
             }
             StmtKind::Scrape(defs) => {
@@ -66,7 +102,8 @@ fn eval_statement<'a>(
                     let val = eval_expression(def, crawler, env.clone()).await?;
                     res.insert(id.clone(), val);
                 }
-                Ok(Arc::new(Object::Map(res)))
+                results.lock().unwrap().add_result(obj_map_to_json(&res));
+                Ok(Arc::new(Object::Null))
             }
             StmtKind::Expr(expr) => eval_expression(expr, crawler, env.clone()).await,
             StmtKind::ForLoop(floop) => {
@@ -77,7 +114,13 @@ fn eval_statement<'a>(
                             let mut scope = Env::default();
                             scope.add_outer(env.clone());
                             scope.set(&floop.ident, obj.clone());
-                            eval_block(&floop.block, crawler, Arc::new(Mutex::new(scope))).await?;
+                            eval_block(
+                                &floop.block,
+                                crawler,
+                                Arc::new(Mutex::new(scope)),
+                                results.clone(),
+                            )
+                            .await?;
                         }
 
                         Ok(Arc::new(Object::Null))
@@ -90,15 +133,32 @@ fn eval_statement<'a>(
                 env.lock().unwrap().set(ident, val);
                 Ok(Arc::new(Object::Null))
             }
+            StmtKind::Screenshot(path) => {
+                let png = crawler.screenshot().await?;
+                let img = image::io::Reader::new(std::io::Cursor::new(png))
+                    .with_guessed_format()
+                    .map_err(|_| EvalError::ScreenshotError)?
+                    .decode()?;
+                img.save(path)?;
+
+                Ok(Arc::new(Object::Null))
+            }
         }
     }
     .boxed()
 }
 
-async fn eval_block(block: &Block, crawler: &fantoccini::Client, env: EnvPointer) -> EvalResult {
+async fn eval_block(
+    block: &Block,
+    crawler: &fantoccini::Client,
+    env: EnvPointer,
+    results: ScrapeResultsPtr,
+) -> EvalResult {
     let mut res = Arc::new(Object::Null);
     for stmt in &block.stmts {
-        res = eval_statement(stmt, crawler, env.clone()).await?.clone();
+        res = eval_statement(stmt, crawler, env.clone(), results.clone())
+            .await?
+            .clone();
     }
     Ok(res)
 }
@@ -127,6 +187,24 @@ fn apply_call<'a>(
     .boxed()
 }
 
+async fn apply_debug_border(crawler: &fantoccini::Client, selector: &str) {
+    let js = r#"
+    const [selector] = arguments;
+
+    document.querySelector(selector).style.border = "5px dashed yellow";
+    "#;
+    let _ = crawler.execute(js, vec![json!(selector)]).await;
+}
+
+async fn apply_debug_border_all(crawler: &fantoccini::Client, selector: &str) {
+    let js = r#"
+    const [selector] = arguments;
+
+    document.querySelectorAll(selector).forEach(elem => elem.style.border = "5px dashed yellow");
+    "#;
+    let _ = crawler.execute(js, vec![json!(selector)]).await;
+}
+
 fn eval_expression<'a>(
     expr: &'a ExprKind,
     crawler: &'a fantoccini::Client,
@@ -135,16 +213,21 @@ fn eval_expression<'a>(
     async move {
         match expr {
             ExprKind::Select(selector) => match crawler.find(Locator::Css(selector)).await {
-                Ok(node) => Ok(Arc::new(Object::Node(node))),
+                Ok(node) => {
+                    apply_debug_border(&crawler, &selector).await;
+                    Ok(Arc::new(Object::Node(node)))
+                }
                 Err(_) => Ok(Arc::new(Object::Null)),
             },
             ExprKind::SelectAll(selector) => match crawler.find_all(Locator::Css(selector)).await {
-                Ok(nodes) => Ok(Arc::new(Object::List(
-                    nodes
+                Ok(nodes) => {
+                    apply_debug_border_all(&crawler, &selector).await;
+                    let elems = nodes
                         .iter()
                         .map(|e| Arc::new(Object::Node(e.clone())))
-                        .collect(),
-                ))),
+                        .collect();
+                    Ok(Arc::new(Object::List(elems)))
+                }
                 Err(_) => Ok(Arc::new(Object::Null)),
             },
             ExprKind::Str(s) => Ok(Arc::new(Object::Str(s.to_owned()))),
@@ -172,4 +255,16 @@ fn eval_expression<'a>(
         }
     }
     .boxed()
+}
+
+impl From<fantoccini::error::CmdError> for EvalError {
+    fn from(_: fantoccini::error::CmdError) -> Self {
+        Self::BrowserError
+    }
+}
+
+impl From<image::ImageError> for EvalError {
+    fn from(_: image::ImageError) -> Self {
+        Self::ScreenshotError
+    }
 }
