@@ -1,9 +1,6 @@
-use std::{
-    env, fs,
-    process::Command,
-    sync::{Arc, Mutex},
-};
+use std::{env, fs, process::Command, sync::Arc};
 
+use futures::lock::Mutex;
 use repl::run_repl;
 use scout_interpreter::{env::Env, eval, ScrapeResultsPtr};
 use scout_lexer::Lexer;
@@ -44,8 +41,14 @@ async fn main() {
     let child = Command::new("geckodriver")
         .arg("--port")
         .arg("4444")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
         .spawn()
         .expect("error spinning up driver process");
+
+    // sleep to allow driver to start
+    std::thread::sleep(std::time::Duration::from_millis(50));
+
     let crawler = fantoccini::ClientBuilder::native()
         .connect("http://localhost:4444")
         .await
@@ -56,7 +59,7 @@ async fn main() {
     if let Err(e) = run(args, &crawler, results.clone()).await {
         println!("Error: {}", e);
     }
-    let json_results = results.lock().unwrap().to_json();
+    let json_results = results.lock().await.to_json();
     println!("Scrape results:\n\n{}\n", json_results);
     let _ = crawler.close().await;
 

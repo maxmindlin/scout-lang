@@ -1,8 +1,11 @@
 use crate::Object;
+use futures::future::BoxFuture;
+use futures::lock::Mutex;
+use futures::FutureExt;
 use scout_parser::ast::Identifier;
 use std::borrow::Borrow;
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex, Weak};
+use std::sync::{Arc, Weak};
 
 pub(crate) type EnvPointer = Arc<Mutex<Env>>;
 
@@ -13,35 +16,41 @@ pub struct Env {
 }
 
 impl Env {
-    pub fn add_outer(&mut self, env: EnvPointer) {
-        *self.outer.get_mut().unwrap() = Arc::downgrade(&env);
+    pub async fn add_outer(&mut self, env: EnvPointer) {
+        *self.outer.get_mut() = Arc::downgrade(&env);
     }
 
-    pub fn get(&self, id: &Identifier) -> Option<Arc<Object>> {
-        match self.outer.borrow().lock().unwrap().upgrade() {
-            None => self.store.get(&id.name).cloned(),
-            Some(env) => {
-                if let Some(obj) = self.store.get(&id.name) {
-                    Some(obj.clone())
-                } else {
-                    env.lock().unwrap().get(id)
+    pub fn get<'a>(&'a self, id: &'a Identifier) -> BoxFuture<'a, Option<Arc<Object>>> {
+        async move {
+            match self.outer.borrow().lock().await.upgrade() {
+                None => self.store.get(&id.name).cloned(),
+                Some(env) => {
+                    if let Some(obj) = self.store.get(&id.name) {
+                        Some(obj.clone())
+                    } else {
+                        env.lock().await.get(id).await
+                    }
                 }
             }
         }
+        .boxed()
     }
 
-    pub fn set(&mut self, id: &Identifier, obj: Arc<Object>) {
-        match self.outer.lock().unwrap().upgrade() {
-            None => {
-                self.store.insert(id.name.clone(), obj);
-            }
-            Some(env) => {
-                if env.lock().unwrap().get(id).is_some() {
-                    env.lock().unwrap().set(id, obj);
-                } else {
+    pub fn set<'a>(&'a mut self, id: &'a Identifier, obj: Arc<Object>) -> BoxFuture<'a, ()> {
+        async move {
+            match self.outer.lock().await.upgrade() {
+                None => {
                     self.store.insert(id.name.clone(), obj);
                 }
+                Some(env) => {
+                    if env.lock().await.get(id).await.is_some() {
+                        env.lock().await.set(id, obj).await;
+                    } else {
+                        self.store.insert(id.name.clone(), obj);
+                    }
+                }
             }
         }
+        .boxed()
     }
 }

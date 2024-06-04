@@ -150,8 +150,40 @@ impl Parser {
                     _ => Ok(ExprKind::Ident(Identifier::new(self.curr.literal.clone()))),
                 }
             }
-            TokenKind::Select => Ok(ExprKind::Select(self.curr.literal.clone())),
-            TokenKind::SelectAll => Ok(ExprKind::SelectAll(self.curr.literal.clone())),
+            TokenKind::Select => match self.peek.kind {
+                TokenKind::Str => {
+                    self.next_token();
+                    Ok(ExprKind::Select(self.curr.literal.clone(), None))
+                }
+                TokenKind::LParen => {
+                    // @TODO refactor
+                    self.next_token();
+                    self.expect_peek(TokenKind::Ident)?;
+                    let ident = Identifier::new(self.curr.literal.clone());
+                    self.expect_peek(TokenKind::RParen)?;
+                    self.expect_peek(TokenKind::Str)?;
+                    let expr = ExprKind::Select(self.curr.literal.clone(), Some(ident));
+                    Ok(expr)
+                }
+                _ => Err(ParseError::InvalidToken(self.peek.kind)),
+            },
+            TokenKind::SelectAll => match self.peek.kind {
+                TokenKind::Str => {
+                    self.next_token();
+                    Ok(ExprKind::SelectAll(self.curr.literal.clone(), None))
+                }
+                TokenKind::LParen => {
+                    // @TODO refactor
+                    self.next_token();
+                    self.expect_peek(TokenKind::Ident)?;
+                    let ident = Identifier::new(self.curr.literal.clone());
+                    self.expect_peek(TokenKind::RParen)?;
+                    self.expect_peek(TokenKind::Str)?;
+                    let expr = ExprKind::SelectAll(self.curr.literal.clone(), Some(ident));
+                    Ok(expr)
+                }
+                _ => Err(ParseError::InvalidToken(self.peek.kind)),
+            },
             TokenKind::Str => Ok(ExprKind::Str(self.curr.literal.clone())),
             _ => Err(ParseError::InvalidToken(self.curr.kind)),
         }
@@ -218,7 +250,7 @@ mod tests {
         StmtKind::Scrape(
             HashLiteral::from(
                 vec![
-                    (Identifier::new("a".into()), ExprKind::Select("b".into()))
+                    (Identifier::new("a".into()), ExprKind::Select("b".into(), None))
                 ]
             )
         )
@@ -228,8 +260,8 @@ mod tests {
         StmtKind::Scrape(
             HashLiteral::from(
                 vec![
-                    (Identifier::new("a".into()), ExprKind::Select("b".into())),
-                    (Identifier::new("c".into()), ExprKind::Select("d".into()))
+                    (Identifier::new("a".into()), ExprKind::Select("b".into(), None)),
+                    (Identifier::new("c".into()), ExprKind::Select("d".into(), None))
                 ]
             )
         )
@@ -239,7 +271,7 @@ mod tests {
         StmtKind::Scrape(
             HashLiteral::from(
                 vec![
-                    (Identifier::new("a".into()), ExprKind::SelectAll("b".into())),
+                    (Identifier::new("a".into()), ExprKind::SelectAll("b".into(), None)),
                 ]
             )
         )
@@ -267,7 +299,7 @@ mod tests {
                     (
                         Identifier::new("a".into()),
                         ExprKind::Chain(vec![
-                            ExprKind::Select("b".into()),
+                            ExprKind::Select("b".into(), None),
                             ExprKind::Call(
                                 Identifier::new("fn".into()),
                                 vec![ExprKind::Str("a".into())]
@@ -281,14 +313,14 @@ mod tests {
     #[test_case(
         r#"for node in $$"a" do end"#,
         StmtKind::ForLoop(
-            ForLoop::new(Identifier::new("node".into()), ExprKind::SelectAll("a".into()), Block::new(vec![]))
+            ForLoop::new(Identifier::new("node".into()), ExprKind::SelectAll("a".into(), None), Block::new(vec![]))
         )
     )]
     #[test_case(
         r#"for node in $$"a" do $"a" end"#,
         StmtKind::ForLoop(
-            ForLoop::new(Identifier::new("node".into()), ExprKind::SelectAll("a".into()), Block::new(vec![
-                StmtKind::Expr(ExprKind::Select("a".into()))
+            ForLoop::new(Identifier::new("node".into()), ExprKind::SelectAll("a".into(), None), Block::new(vec![
+                StmtKind::Expr(ExprKind::Select("a".into(), None))
             ]))
         )
     )]
@@ -302,7 +334,7 @@ mod tests {
     #[test_case(
         r#"for node in $$"a" do scrape {} end"#,
         StmtKind::ForLoop(
-            ForLoop::new(Identifier::new("node".into()), ExprKind::SelectAll("a".into()), Block::new(vec![
+            ForLoop::new(Identifier::new("node".into()), ExprKind::SelectAll("a".into(), None), Block::new(vec![
                 StmtKind::Scrape(HashLiteral::default())
             ]))
         )

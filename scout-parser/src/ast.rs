@@ -27,9 +27,9 @@ pub enum ExprKind {
     Str(String),
     Number(f64),
     Boolean(bool),
-    Select(String),
     Ident(Identifier),
-    SelectAll(String),
+    Select(String, Option<Identifier>),
+    SelectAll(String, Option<Identifier>),
     Call(Identifier, Vec<ExprKind>),
     Chain(Vec<ExprKind>),
 }

@@ -1,5 +1,6 @@
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
+use futures::lock::Mutex;
 use rustyline::{error::ReadlineError, Editor};
 use scout_interpreter::{env::Env, eval, ScrapeResultsPtr};
 use scout_lexer::Lexer;

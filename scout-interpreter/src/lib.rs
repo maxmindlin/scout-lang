@@ -1,10 +1,8 @@
-use std::{
-    collections::HashMap,
-    sync::{Arc, Mutex},
-};
+use std::{collections::HashMap, sync::Arc};
 
 use env::EnvPointer;
 use fantoccini::Locator;
+use futures::lock::Mutex;
 use futures::{future::BoxFuture, FutureExt};
 use object::{obj_map_to_json, Object};
 use scout_parser::ast::{Block, ExprKind, Identifier, NodeKind, Program, StmtKind};
@@ -102,7 +100,7 @@ fn eval_statement<'a>(
                     let val = eval_expression(def, crawler, env.clone()).await?;
                     res.insert(id.clone(), val);
                 }
-                results.lock().unwrap().add_result(obj_map_to_json(&res));
+                results.lock().await.add_result(obj_map_to_json(&res));
                 Ok(Arc::new(Object::Null))
             }
             StmtKind::Expr(expr) => eval_expression(expr, crawler, env.clone()).await,
@@ -112,8 +110,8 @@ fn eval_statement<'a>(
                     Object::List(objs) => {
                         for obj in objs {
                             let mut scope = Env::default();
-                            scope.add_outer(env.clone());
-                            scope.set(&floop.ident, obj.clone());
+                            scope.add_outer(env.clone()).await;
+                            scope.set(&floop.ident, obj.clone()).await;
                             eval_block(
                                 &floop.block,
                                 crawler,
@@ -130,7 +128,7 @@ fn eval_statement<'a>(
             }
             StmtKind::Assign(ident, expr) => {
                 let val = eval_expression(expr, crawler, env.clone()).await?;
-                env.lock().unwrap().set(ident, val);
+                env.lock().await.set(ident, val).await;
                 Ok(Arc::new(Object::Null))
             }
             StmtKind::Screenshot(path) => {
@@ -212,29 +210,44 @@ fn eval_expression<'a>(
 ) -> BoxFuture<'a, EvalResult> {
     async move {
         match expr {
-            ExprKind::Select(selector) => match crawler.find(Locator::Css(selector)).await {
-                Ok(node) => {
-                    apply_debug_border(crawler, selector).await;
-                    Ok(Arc::new(Object::Node(node)))
-                }
-                Err(_) => Ok(Arc::new(Object::Null)),
+            ExprKind::Select(selector, scope) => match scope {
+                Some(ident) => match env.lock().await.get(ident).await.as_deref() {
+                    Some(Object::Node(elem)) => match elem.find(Locator::Css(selector)).await {
+                        Ok(node) => {
+                            apply_debug_border(crawler, selector).await;
+                            Ok(Arc::new(Object::Node(node)))
+                        }
+                        Err(_) => Ok(Arc::new(Object::Null)),
+                    },
+                    Some(_) => Err(EvalError::InvalidUsage),
+                    None => Err(EvalError::UnknownIdent),
+                },
+                None => match crawler.find(Locator::Css(selector)).await {
+                    Ok(node) => {
+                        apply_debug_border(crawler, selector).await;
+                        Ok(Arc::new(Object::Node(node)))
+                    }
+                    Err(_) => Ok(Arc::new(Object::Null)),
+                },
             },
-            ExprKind::SelectAll(selector) => match crawler.find_all(Locator::Css(selector)).await {
-                Ok(nodes) => {
-                    apply_debug_border_all(crawler, selector).await;
-                    let elems = nodes
-                        .iter()
-                        .map(|e| Arc::new(Object::Node(e.clone())))
-                        .collect();
-                    Ok(Arc::new(Object::List(elems)))
+            ExprKind::SelectAll(selector, scope) => {
+                match crawler.find_all(Locator::Css(selector)).await {
+                    Ok(nodes) => {
+                        apply_debug_border_all(crawler, selector).await;
+                        let elems = nodes
+                            .iter()
+                            .map(|e| Arc::new(Object::Node(e.clone())))
+                            .collect();
+                        Ok(Arc::new(Object::List(elems)))
+                    }
+                    Err(_) => Ok(Arc::new(Object::Null)),
                 }
-                Err(_) => Ok(Arc::new(Object::Null)),
-            },
+            }
             ExprKind::Str(s) => Ok(Arc::new(Object::Str(s.to_owned()))),
             ExprKind::Call(ident, params) => {
                 apply_call(ident, params, crawler, None, env.clone()).await
             }
-            ExprKind::Ident(ident) => match env.lock().unwrap().get(ident) {
+            ExprKind::Ident(ident) => match env.lock().await.get(ident).await {
                 Some(obj) => Ok(obj.clone()),
                 None => Err(EvalError::UnknownIdent),
             },

@@ -1,4 +1,4 @@
-workspace = { members = [ "scout-interpreter","scout-lexer", "scout-parser"] }
+workspace = { members = ["scout-interpreter", "scout-lexer", "scout-parser"] }
 [package]
 name = "scout"
 version = "0.1.0"
@@ -7,6 +7,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+futures = "0.3.30"
 scout-interpreter = { path = "./scout-interpreter/" }
 scout-lexer = { path = "./scout-lexer/" }
 scout-parser = { path = "./scout-parser/" }
@@ -15,3 +16,4 @@ colored = "2"
 fantoccini = "0.19.3"
 tokio = { version = "1", features = ["full"] }
 serde_json = "1.0"
+
