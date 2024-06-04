@@ -7,12 +7,8 @@ use scout_parser::{ast::NodeKind, Parser};
 
 const PROMPT: &str = ">> ";
 
-pub async fn run_repl() {
+pub async fn run_repl(crawler: &fantoccini::Client) -> Result<(), Box<dyn std::error::Error>> {
     let mut rl = Editor::<()>::new();
-    let crawler = fantoccini::ClientBuilder::native()
-        .connect("http://localhost:4444")
-        .await
-        .expect("error creating driver");
     let env = Arc::new(Mutex::new(Env::default()));
     if rl.load_history("history.txt").is_err() {
         println!("No previous history.");
@@ -28,7 +24,7 @@ pub async fn run_repl() {
                 let mut parser = Parser::new(lexer);
                 match parser.parse_program() {
                     Ok(prgm) => {
-                        let obj = eval(NodeKind::Program(prgm), &crawler, env.clone()).await;
+                        let obj = eval(NodeKind::Program(prgm), crawler, env.clone()).await;
                         println!("{:?}", obj);
                         //pprint(Arc::into_inner(obj).unwrap());
                     }
@@ -50,4 +46,5 @@ pub async fn run_repl() {
         }
     }
     rl.save_history("history.txt").unwrap();
+    Ok(())
 }
