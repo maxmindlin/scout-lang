@@ -189,7 +189,8 @@ async fn apply_debug_border(crawler: &fantoccini::Client, selector: &str) {
     let js = r#"
     const [selector] = arguments;
 
-    document.querySelector(selector).style.border = "5px dashed yellow";
+    document.querySelector(selector).style.boxShadow = "0 0 0 5px red";
+    document.querySelector(selector).style.outline = "dashed 5px yellow";
     "#;
     let _ = crawler.execute(js, vec![json!(selector)]).await;
 }
@@ -198,7 +199,8 @@ async fn apply_debug_border_all(crawler: &fantoccini::Client, selector: &str) {
     let js = r#"
     const [selector] = arguments;
 
-    document.querySelectorAll(selector).forEach(elem => elem.style.border = "5px dashed yellow");
+    document.querySelectorAll(selector).forEach(elem => elem.style.boxShadow = "0 0 0 5px red");
+    document.querySelectorAll(selector).forEach(elem => elem.style.outline = "dashed 5px yellow");
     "#;
     let _ = crawler.execute(js, vec![json!(selector)]).await;
 }
@@ -214,6 +216,7 @@ fn eval_expression<'a>(
                 Some(ident) => match env.lock().await.get(ident).await.as_deref() {
                     Some(Object::Node(elem)) => match elem.find(Locator::Css(selector)).await {
                         Ok(node) => {
+                            // @TODO fix - applies borders outside scope
                             apply_debug_border(crawler, selector).await;
                             Ok(Arc::new(Object::Node(node)))
                         }
@@ -230,8 +233,24 @@ fn eval_expression<'a>(
                     Err(_) => Ok(Arc::new(Object::Null)),
                 },
             },
-            ExprKind::SelectAll(selector, scope) => {
-                match crawler.find_all(Locator::Css(selector)).await {
+            ExprKind::SelectAll(selector, scope) => match scope {
+                Some(ident) => match env.lock().await.get(ident).await.as_deref() {
+                    Some(Object::Node(elem)) => match elem.find_all(Locator::Css(selector)).await {
+                        Ok(nodes) => {
+                            // @TODO fix - applies borders outside scope
+                            apply_debug_border_all(crawler, selector).await;
+                            let elems = nodes
+                                .iter()
+                                .map(|e| Arc::new(Object::Node(e.clone())))
+                                .collect();
+                            Ok(Arc::new(Object::List(elems)))
+                        }
+                        Err(_) => Ok(Arc::new(Object::Null)),
+                    },
+                    Some(_) => Err(EvalError::InvalidUsage),
+                    None => Err(EvalError::UnknownIdent),
+                },
+                None => match crawler.find_all(Locator::Css(selector)).await {
                     Ok(nodes) => {
                         apply_debug_border_all(crawler, selector).await;
                         let elems = nodes
@@ -241,8 +260,8 @@ fn eval_expression<'a>(
                         Ok(Arc::new(Object::List(elems)))
                     }
                     Err(_) => Ok(Arc::new(Object::Null)),
-                }
-            }
+                },
+            },
             ExprKind::Str(s) => Ok(Arc::new(Object::Str(s.to_owned()))),
             ExprKind::Call(ident, params) => {
                 apply_call(ident, params, crawler, None, env.clone()).await

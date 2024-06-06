@@ -13,6 +13,7 @@ type ParseResult<T> = Result<T, ParseError>;
 pub enum ParseError {
     UnexpectedToken(TokenKind, TokenKind),
     InvalidToken(TokenKind),
+    InvalidNumber,
 }
 
 pub struct Parser {
@@ -185,6 +186,18 @@ impl Parser {
                 _ => Err(ParseError::InvalidToken(self.peek.kind)),
             },
             TokenKind::Str => Ok(ExprKind::Str(self.curr.literal.clone())),
+            TokenKind::Int => Ok(ExprKind::Number(
+                self.curr
+                    .literal
+                    .parse::<u64>()
+                    .map_err(|_| ParseError::InvalidNumber)? as f64,
+            )),
+            TokenKind::Float => Ok(ExprKind::Number(
+                self.curr
+                    .literal
+                    .parse()
+                    .map_err(|_| ParseError::InvalidNumber)?,
+            )),
             _ => Err(ParseError::InvalidToken(self.curr.kind)),
         }
     }

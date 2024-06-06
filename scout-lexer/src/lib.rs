@@ -53,31 +53,6 @@ impl Lexer {
                     },
                     None => Token::new(Illegal, '$'.to_string()),
                 },
-                // '$' => match self.peek() {
-                //     Some(c) => match *c {
-                //         '"' => {
-                //             let _ = self.next();
-                //             let literal = self.read_string();
-                //             Token::new(Select, literal)
-                //         }
-                //         '$' => {
-                //             let _ = self.next();
-                //             match self.peek() {
-                //                 Some(c) => match *c {
-                //                     '"' => {
-                //                         let _ = self.next();
-                //                         let literal = self.read_string();
-                //                         Token::new(SelectAll, literal)
-                //                     }
-                //                     _ => Token::new(Illegal, c.to_string()),
-                //                 },
-                //                 _ => Token::new(Illegal, "$$".to_string()),
-                //             }
-                //         }
-                //         _ => Token::new(Illegal, c.to_string()),
-                //     },
-                //     _ => Token::new(Illegal, '$'.to_string()),
-                // },
                 _ if c.is_whitespace() => self.next_token(),
                 _ if c.is_numeric() => {
                     let lit = self.read_numeric();
