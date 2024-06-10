@@ -26,16 +26,15 @@ async fn run(
                 Ok(prgm) => {
                     let res = eval(NodeKind::Program(prgm), crawler, env, results).await;
                     match res {
-                        Ok(o) => println!("{}", o),
+                        Ok(_) => {}
                         Err(e) => println!("Interpeter error: {:?}", e),
                     };
                     Ok(())
-                    // pprint(Arc::into_inner(res).unwrap());
                 }
-                Err(e) => Err(format!("parser error: {:#?}", e).into()),
+                Err(e) => Err(format!("Parser error: {:#?}", e).into()),
             }
         }
-        _ => Err("unsupported number of args".into()),
+        _ => Err("Unsupported number of args".into()),
     }
 }
 
@@ -63,13 +62,15 @@ async fn main() {
         println!("Error: {}", e);
     }
     let json_results = results.lock().await.to_json();
-    println!("Scrape results:\n\n{}\n", json_results);
+    println!("{}", json_results);
     let _ = crawler.close().await;
 
     #[cfg(target_os = "windows")]
     let mut kill = Command::new("taskkill")
         .arg("/PID")
         .arg(&child.id().to_string())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
         .arg("/F")
         .spawn()
         .expect("error sending driver kill");
@@ -77,6 +78,8 @@ async fn main() {
     #[cfg(not(target_os = "windows"))]
     let mut kill = Command::new("kill")
         .args(["-s", "TERM", &child.id().to_string()])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
         .spawn()
         .expect("error sending driver kill");
 

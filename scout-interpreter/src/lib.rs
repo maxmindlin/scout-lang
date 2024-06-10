@@ -20,12 +20,26 @@ pub type ScrapeResultsPtr = Arc<Mutex<ScrapeResults>>;
 
 #[derive(Default, Serialize, Deserialize, Debug)]
 pub struct ScrapeResults {
-    results: Vec<Map<String, Value>>,
+    // results: Vec<Map<String, Value>>,
+    results: Map<String, Value>,
 }
 
 impl ScrapeResults {
-    pub fn add_result(&mut self, res: Map<String, Value>) {
-        self.results.push(res);
+    pub fn add_result(&mut self, res: Map<String, Value>, url: &str) {
+        // self.results.push(res);
+        let entry = self.results.get_mut(url);
+        match entry {
+            None => {
+                self.results.insert(url.to_owned(), vec![res].into());
+            }
+            Some(e) => {
+                if let Value::Array(vec) = e {
+                    vec.push(Value::from(res));
+                } else {
+                    panic!("results was not a vec type");
+                }
+            }
+        }
     }
 
     pub fn to_json(&self) -> String {
@@ -100,7 +114,10 @@ fn eval_statement<'a>(
                     let val = eval_expression(def, crawler, env.clone()).await?;
                     res.insert(id.clone(), val);
                 }
-                results.lock().await.add_result(obj_map_to_json(&res));
+                results.lock().await.add_result(
+                    obj_map_to_json(&res),
+                    crawler.current_url().await.unwrap().as_str(),
+                );
                 Ok(Arc::new(Object::Null))
             }
             StmtKind::Expr(expr) => eval_expression(expr, crawler, env.clone()).await,
