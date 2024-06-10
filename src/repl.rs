@@ -35,7 +35,10 @@ pub async fn run_repl(
                             results.clone(),
                         )
                         .await;
-                        println!("{:?}", obj);
+                        match obj {
+                            Ok(o) => println!("{}", o),
+                            Err(e) => println!("Interpeter error: {:?}", e),
+                        };
                         //pprint(Arc::into_inner(obj).unwrap());
                     }
                     Err(e) => println!("parser error: {:#?}", e),

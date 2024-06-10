@@ -19,6 +19,7 @@ pub enum TokenKind {
     Equal,
 
     // Keywords
+    If,
     For,
     In,
     Do,
@@ -34,6 +35,7 @@ impl TokenKind {
         match literal {
             "for" => Some(For),
             "in" => Some(In),
+            "if" => Some(If),
             "do" => Some(Do),
             "end" => Some(End),
             "goto" => Some(Goto),

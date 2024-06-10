@@ -141,6 +141,9 @@ fn eval_statement<'a>(
 
                 Ok(Arc::new(Object::Null))
             }
+            StmtKind::If(cond, block) => {
+                unimplemented!()
+            }
         }
     }
     .boxed()

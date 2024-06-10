@@ -26,7 +26,7 @@ impl Display for Object {
             }
             Str(s) => write!(f, "\"{}\"", s),
             Node(_) => write!(f, "Node"),
-            List(objs) => write!(f, "[Node; {}]", objs.len()),
+            List(objs) => write!(f, "[Object; {}]", objs.len()),
         }
     }
 }
@@ -41,6 +41,17 @@ impl Object {
             Node(_) => Value::String("Node".to_owned()),
             List(list) => Value::Array(list.iter().map(|obj| obj.to_json()).collect()),
             Map(map) => Value::Object(obj_map_to_json(map)),
+        }
+    }
+
+    pub fn is_truthy(&self) -> bool {
+        use Object::*;
+        match self {
+            Null => false,
+            Str(s) => !s.is_empty(),
+            Map(m) => !m.is_empty(),
+            Node(_) => true,
+            List(v) => !v.is_empty(),
         }
     }
 }

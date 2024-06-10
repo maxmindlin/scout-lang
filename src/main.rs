@@ -25,7 +25,10 @@ async fn run(
             match parser.parse_program() {
                 Ok(prgm) => {
                     let res = eval(NodeKind::Program(prgm), crawler, env, results).await;
-                    println!("{:?}", res);
+                    match res {
+                        Ok(o) => println!("{}", o),
+                        Err(e) => println!("Interpeter error: {:?}", e),
+                    };
                     Ok(())
                     // pprint(Arc::into_inner(res).unwrap());
                 }
