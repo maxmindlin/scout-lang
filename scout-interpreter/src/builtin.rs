@@ -3,7 +3,7 @@ use std::sync::Arc;
 use fantoccini::elements::Element;
 use futures::{future::BoxFuture, FutureExt};
 
-use crate::{object::Object, EvalError, EvalResult};
+use crate::{object::Object, EvalError, EvalResult, ScrapeResultsPtr};
 
 macro_rules! assert_param_len {
     ($arg:expr, $len:expr) => {
@@ -20,6 +20,7 @@ pub enum BuiltinKind {
     Href,
     Trim,
     Click,
+    PrintResults,
 }
 
 impl BuiltinKind {
@@ -31,11 +32,12 @@ impl BuiltinKind {
             "trim" => Some(Trim),
             "href" => Some(Href),
             "click" => Some(Click),
+            "printResults" => Some(PrintResults),
             _ => None,
         }
     }
 
-    pub async fn apply(&self, args: Vec<Arc<Object>>) -> EvalResult {
+    pub async fn apply(&self, results: ScrapeResultsPtr, args: Vec<Arc<Object>>) -> EvalResult {
         use BuiltinKind::*;
         match self {
             Print => {
@@ -82,6 +84,11 @@ impl BuiltinKind {
                 } else {
                     Err(EvalError::InvalidFnParams)
                 }
+            }
+            PrintResults => {
+                let json = results.lock().await.to_json();
+                println!("{}", json);
+                Ok(Arc::new(Object::Null))
             }
         }
     }

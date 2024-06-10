@@ -75,7 +75,7 @@ pub async fn eval(
     match node {
         Program(p) => eval_program(p, crawler, env.clone(), results.clone()).await,
         Stmt(s) => eval_statement(&s, crawler, env.clone(), results.clone()).await,
-        Expr(e) => eval_expression(&e, crawler, env.clone()).await,
+        Expr(e) => eval_expression(&e, crawler, env.clone(), results.clone()).await,
     }
 }
 
@@ -111,7 +111,7 @@ fn eval_statement<'a>(
             StmtKind::Scrape(defs) => {
                 let mut res = HashMap::new();
                 for (id, def) in &defs.pairs {
-                    let val = eval_expression(def, crawler, env.clone()).await?;
+                    let val = eval_expression(def, crawler, env.clone(), results.clone()).await?;
                     res.insert(id.clone(), val);
                 }
                 results.lock().await.add_result(
@@ -120,9 +120,12 @@ fn eval_statement<'a>(
                 );
                 Ok(Arc::new(Object::Null))
             }
-            StmtKind::Expr(expr) => eval_expression(expr, crawler, env.clone()).await,
+            StmtKind::Expr(expr) => {
+                eval_expression(expr, crawler, env.clone(), results.clone()).await
+            }
             StmtKind::ForLoop(floop) => {
-                let items = eval_expression(&floop.iterable, crawler, env.clone()).await?;
+                let items =
+                    eval_expression(&floop.iterable, crawler, env.clone(), results.clone()).await?;
                 match &*items {
                     Object::List(objs) => {
                         for obj in objs {
@@ -144,7 +147,7 @@ fn eval_statement<'a>(
                 }
             }
             StmtKind::Assign(ident, expr) => {
-                let val = eval_expression(expr, crawler, env.clone()).await?;
+                let val = eval_expression(expr, crawler, env.clone(), results.clone()).await?;
                 env.lock().await.set(ident, val).await;
                 Ok(Arc::new(Object::Null))
             }
@@ -158,7 +161,7 @@ fn eval_statement<'a>(
 
                 Ok(Arc::new(Object::Null))
             }
-            StmtKind::If(cond, block) => {
+            StmtKind::If(_cond, _block) => {
                 unimplemented!()
             }
         }
@@ -187,18 +190,19 @@ fn apply_call<'a>(
     crawler: &'a fantoccini::Client,
     prev: Option<Arc<Object>>,
     env: EnvPointer,
+    results: ScrapeResultsPtr,
 ) -> BoxFuture<'a, EvalResult> {
     async move {
         let mut obj_params = Vec::new();
         for param in params.iter() {
-            let expr = eval_expression(param, crawler, env.clone()).await?;
+            let expr = eval_expression(param, crawler, env.clone(), results.clone()).await?;
             obj_params.push(expr);
         }
         if let Some(obj) = prev {
             obj_params.insert(0, obj);
         }
         match BuiltinKind::is_from(&ident.name) {
-            Some(builtin) => builtin.apply(obj_params).await,
+            Some(builtin) => builtin.apply(results.clone(), obj_params).await,
             None => Err(EvalError::UnknownIdent),
         }
     }
@@ -229,6 +233,7 @@ fn eval_expression<'a>(
     expr: &'a ExprKind,
     crawler: &'a fantoccini::Client,
     env: EnvPointer,
+    results: ScrapeResultsPtr,
 ) -> BoxFuture<'a, EvalResult> {
     async move {
         match expr {
@@ -284,7 +289,7 @@ fn eval_expression<'a>(
             },
             ExprKind::Str(s) => Ok(Arc::new(Object::Str(s.to_owned()))),
             ExprKind::Call(ident, params) => {
-                apply_call(ident, params, crawler, None, env.clone()).await
+                apply_call(ident, params, crawler, None, env.clone(), results.clone()).await
             }
             ExprKind::Ident(ident) => match env.lock().await.get(ident).await {
                 Some(obj) => Ok(obj.clone()),
@@ -295,9 +300,10 @@ fn eval_expression<'a>(
                 for expr in exprs {
                     let eval = match expr {
                         ExprKind::Call(ident, params) => {
-                            apply_call(ident, params, crawler, prev, env.clone()).await?
+                            apply_call(ident, params, crawler, prev, env.clone(), results.clone())
+                                .await?
                         }
-                        _ => eval_expression(expr, crawler, env.clone()).await?,
+                        _ => eval_expression(expr, crawler, env.clone(), results.clone()).await?,
                     };
                     prev = Some(eval);
                 }
