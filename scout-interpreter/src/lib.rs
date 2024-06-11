@@ -1,3 +1,5 @@
+use std::thread::sleep;
+use std::time::Duration;
 use std::{collections::HashMap, sync::Arc};
 
 use env::EnvPointer;
@@ -104,6 +106,10 @@ fn eval_statement<'a>(
                 if crawler.goto(url.as_str()).await.is_err() {
                     return Err(EvalError::InvalidUrl);
                 };
+
+                // @TODO: Need a better way to determine that a page is "done"
+                sleep(Duration::from_secs(1));
+
                 Ok(Arc::new(Object::Null))
             }
             StmtKind::Scrape(defs) => {

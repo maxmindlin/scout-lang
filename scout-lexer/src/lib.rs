@@ -27,7 +27,13 @@ impl Lexer {
                 '}' => Token::new(RBrace, c.to_string()),
                 ':' => Token::new(Colon, c.to_string()),
                 ',' => Token::new(Comma, c.to_string()),
-                '=' => Token::new(Equal, c.to_string()),
+                '=' => match self.peek() {
+                    Some('=') => {
+                        self.next();
+                        Token::new(DbEqual, "==".to_string())
+                    }
+                    _ => Token::new(Equal, '='.to_string()),
+                },
                 '"' => {
                     let literal = self.read_string();
                     Token::new(Str, literal)

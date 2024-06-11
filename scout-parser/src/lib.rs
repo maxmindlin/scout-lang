@@ -9,6 +9,31 @@ pub mod ast;
 
 type ParseResult<T> = Result<T, ParseError>;
 
+#[derive(Debug, PartialOrd, Ord, PartialEq, Eq)]
+pub enum Precedence {
+    Lowest,
+    Equals,
+    LessGreater,
+    Sum,
+    Product,
+    Prefix,
+    Call,
+    Index,
+}
+
+impl From<TokenKind> for Precedence {
+    fn from(value: TokenKind) -> Self {
+        use TokenKind::*;
+        match value {
+            Equal => Self::Equals,
+            DbEqual => Self::Equals,
+            LParen => Self::Call,
+            Pipe => Self::Index,
+            _ => Self::Lowest,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub enum ParseError {
     UnexpectedToken(TokenKind, TokenKind),
