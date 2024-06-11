@@ -17,6 +17,7 @@ pub enum TokenKind {
     Select,
     SelectAll,
     Equal,
+    DbEqual,
 
     // Keywords
     If,

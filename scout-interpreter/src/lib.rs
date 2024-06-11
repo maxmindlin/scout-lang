@@ -20,13 +20,11 @@ pub type ScrapeResultsPtr = Arc<Mutex<ScrapeResults>>;
 
 #[derive(Default, Serialize, Deserialize, Debug)]
 pub struct ScrapeResults {
-    // results: Vec<Map<String, Value>>,
     results: Map<String, Value>,
 }
 
 impl ScrapeResults {
     pub fn add_result(&mut self, res: Map<String, Value>, url: &str) {
-        // self.results.push(res);
         let entry = self.results.get_mut(url);
         match entry {
             None => {

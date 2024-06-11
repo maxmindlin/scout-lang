@@ -1,0 +1,8 @@
+goto "https://github.com/maxmindlin/scout-lang"
+
+for row in $$"table tr td[colspan='1']" do
+    scrape {
+        text: row |> textContent(),
+        link: $(row)"a" |> href(),
+    }
+end
