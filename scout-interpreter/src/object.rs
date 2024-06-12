@@ -1,7 +1,7 @@
 use std::{collections::HashMap, fmt::Display, sync::Arc};
 
 use scout_parser::ast::Identifier;
-use serde_json::Value;
+use serde_json::{json, Value};
 
 #[derive(Debug)]
 pub enum Object {
@@ -10,6 +10,25 @@ pub enum Object {
     Str(String),
     Node(fantoccini::elements::Element),
     List(Vec<Arc<Object>>),
+    Boolean(bool),
+    Number(f64),
+}
+
+impl PartialEq for Object {
+    fn eq(&self, other: &Self) -> bool {
+        use Object::*;
+        match (self, other) {
+            (Null, Null) => true,
+            (Map(a), Map(b)) => a == b,
+            (Str(a), Str(b)) => a == b,
+            // @TODO: check if this is even correct
+            (Node(a), Node(b)) => a.element_id() == b.element_id(),
+            (List(a), List(b)) => a == b,
+            (Boolean(a), Boolean(b)) => a == b,
+            (Number(a), Number(b)) => a == b,
+            _ => false,
+        }
+    }
 }
 
 impl Display for Object {
@@ -27,6 +46,8 @@ impl Display for Object {
             Str(s) => write!(f, "\"{}\"", s),
             Node(_) => write!(f, "Node"),
             List(objs) => write!(f, "[Object; {}]", objs.len()),
+            Boolean(b) => write!(f, "{}", b),
+            Number(n) => write!(f, "{}", n),
         }
     }
 }
@@ -41,6 +62,8 @@ impl Object {
             Node(_) => Value::String("Node".to_owned()),
             List(list) => Value::Array(list.iter().map(|obj| obj.to_json()).collect()),
             Map(map) => Value::Object(obj_map_to_json(map)),
+            Boolean(b) => Value::Bool(*b),
+            Number(n) => json!(n),
         }
     }
 
@@ -52,6 +75,9 @@ impl Object {
             Map(m) => !m.is_empty(),
             Node(_) => true,
             List(v) => !v.is_empty(),
+            Boolean(b) => *b,
+            // @TODO: Idk what truthiness of floats should be
+            Number(n) => *n > 0.0,
         }
     }
 }

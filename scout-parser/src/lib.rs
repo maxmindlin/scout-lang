@@ -9,31 +9,6 @@ pub mod ast;
 
 type ParseResult<T> = Result<T, ParseError>;
 
-#[derive(Debug, PartialOrd, Ord, PartialEq, Eq)]
-pub enum Precedence {
-    Lowest,
-    Equals,
-    LessGreater,
-    Sum,
-    Product,
-    Prefix,
-    Call,
-    Index,
-}
-
-impl From<TokenKind> for Precedence {
-    fn from(value: TokenKind) -> Self {
-        use TokenKind::*;
-        match value {
-            Equal => Self::Equals,
-            DbEqual => Self::Equals,
-            LParen => Self::Call,
-            Pipe => Self::Index,
-            _ => Self::Lowest,
-        }
-    }
-}
-
 #[derive(Debug)]
 pub enum ParseError {
     UnexpectedToken(TokenKind, TokenKind),
@@ -84,8 +59,9 @@ impl Parser {
             TokenKind::Scrape => self.parse_scrape_stmt(),
             TokenKind::For => self.parse_for_loop(),
             TokenKind::Screenshot => self.parse_screenshot_stmt(),
+            TokenKind::If => self.parse_if(),
             TokenKind::Ident => match self.peek.kind {
-                TokenKind::Equal => {
+                TokenKind::Assign => {
                     let ident = Identifier::new(self.curr.literal.clone());
                     self.next_token();
                     self.next_token();
@@ -98,6 +74,25 @@ impl Parser {
         }
     }
 
+    fn parse_if(&mut self) -> ParseResult<StmtKind> {
+        self.next_token();
+        let cond = self.parse_expr()?;
+        self.expect_peek(TokenKind::Do)?;
+        self.next_token();
+        let block = self.parse_block()?;
+        Ok(StmtKind::If(cond, block))
+    }
+
+    fn parse_block(&mut self) -> ParseResult<Block> {
+        let mut stmts = Vec::new();
+        while self.curr.kind != TokenKind::End {
+            let stmt = self.parse_stmt()?;
+            stmts.push(stmt);
+            self.next_token();
+        }
+        Ok(Block::new(stmts))
+    }
+
     /// `for <ident> in <expr> do <block> end`
     fn parse_for_loop(&mut self) -> ParseResult<StmtKind> {
         self.expect_peek(TokenKind::Ident)?;
@@ -106,14 +101,15 @@ impl Parser {
         self.next_token();
         let iterable = self.parse_expr()?;
         self.expect_peek(TokenKind::Do)?;
-        let mut stmts = Vec::new();
+        // let mut stmts = Vec::new();
         self.next_token();
-        while self.curr.kind != TokenKind::End {
-            let stmt = self.parse_stmt()?;
-            stmts.push(stmt);
-            self.next_token();
-        }
-        let block = Block::new(stmts);
+        let block = self.parse_block()?;
+        // while self.curr.kind != TokenKind::End {
+        //     let stmt = self.parse_stmt()?;
+        //     stmts.push(stmt);
+        //     self.next_token();
+        // }
+        // let block = Block::new(stmts);
 
         self.next_token();
         let floop = ForLoop::new(ident, iterable, block);
@@ -168,7 +164,7 @@ impl Parser {
     }
 
     fn parse_single_expr(&mut self) -> ParseResult<ExprKind> {
-        match self.curr.kind {
+        let lhs = match self.curr.kind {
             TokenKind::Ident => {
                 // Parse multiple types of ident expressions
                 match self.peek.kind {
@@ -224,6 +220,16 @@ impl Parser {
                     .map_err(|_| ParseError::InvalidNumber)?,
             )),
             _ => Err(ParseError::InvalidToken(self.curr.kind)),
+        }?;
+
+        if self.peek.kind.is_infix() {
+            self.next_token();
+            let op = self.curr.kind;
+            self.next_token();
+            let rhs = self.parse_expr()?;
+            Ok(ExprKind::Infix(Box::new(lhs), op, Box::new(rhs)))
+        } else {
+            Ok(lhs)
         }
     }
 
@@ -376,6 +382,17 @@ mod tests {
                 StmtKind::Scrape(HashLiteral::default())
             ]))
         )
+    )]
+    #[test_case(
+        r#"x = 1 == 2"#,
+        StmtKind::Assign(
+            Identifier::new("x".to_string()),
+            ExprKind::Infix(Box::new(ExprKind::Number(1.)), TokenKind::EQ, Box::new(ExprKind::Number(2.)))
+        )
+    )]
+    #[test_case(
+        r#"if 1 do end"#,
+        StmtKind::If(ExprKind::Number(1.), Block::new(vec![]))
     )]
     fn test_single_stmt(input: &str, exp: StmtKind) {
         let stmt = extract_first_stmt(input);

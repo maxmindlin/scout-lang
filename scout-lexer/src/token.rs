@@ -16,8 +16,9 @@ pub enum TokenKind {
     RBrace,
     Select,
     SelectAll,
-    Equal,
-    DbEqual,
+    Assign,
+    EQ,
+    NEQ,
 
     // Keywords
     If,
@@ -43,6 +44,15 @@ impl TokenKind {
             "scrape" => Some(Scrape),
             "screenshot" => Some(Screenshot),
             _ => None,
+        }
+    }
+
+    pub fn is_infix(&self) -> bool {
+        use TokenKind::*;
+        match self {
+            EQ => true,
+            NEQ => true,
+            _ => false,
         }
     }
 }
