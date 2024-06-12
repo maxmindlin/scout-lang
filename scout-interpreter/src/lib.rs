@@ -7,6 +7,7 @@ use fantoccini::Locator;
 use futures::lock::Mutex;
 use futures::{future::BoxFuture, FutureExt};
 use object::{obj_map_to_json, Object};
+use scout_lexer::TokenKind;
 use scout_parser::ast::{Block, ExprKind, Identifier, NodeKind, Program, StmtKind};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
@@ -27,18 +28,16 @@ pub struct ScrapeResults {
 
 impl ScrapeResults {
     pub fn add_result(&mut self, res: Map<String, Value>, url: &str) {
-        let entry = self.results.get_mut(url);
-        match entry {
+        match self.results.get_mut(url) {
             None => {
                 self.results.insert(url.to_owned(), vec![res].into());
             }
-            Some(e) => {
-                if let Value::Array(vec) = e {
-                    vec.push(Value::from(res));
-                } else {
-                    panic!("results was not a vec type");
-                }
+            Some(Value::Array(v)) => {
+                v.push(Value::from(res));
             }
+            // This should never happen since `add_results` is the only way to
+            // insert to the map.
+            _ => panic!("results was not a vec type"),
         }
     }
 
@@ -165,8 +164,14 @@ fn eval_statement<'a>(
 
                 Ok(Arc::new(Object::Null))
             }
-            StmtKind::If(_cond, _block) => {
-                unimplemented!()
+            StmtKind::If(cond, block) => {
+                let truth_check =
+                    eval_expression(cond, crawler, env.clone(), results.clone()).await?;
+                if truth_check.is_truthy() {
+                    eval_block(block, crawler, env.clone(), results.clone()).await?;
+                }
+
+                Ok(Arc::new(Object::Null))
             }
         }
     }
@@ -292,6 +297,7 @@ fn eval_expression<'a>(
                 },
             },
             ExprKind::Str(s) => Ok(Arc::new(Object::Str(s.to_owned()))),
+            ExprKind::Number(n) => Ok(Arc::new(Object::Number(*n))),
             ExprKind::Call(ident, params) => {
                 apply_call(ident, params, crawler, None, env.clone(), results.clone()).await
             }
@@ -313,10 +319,25 @@ fn eval_expression<'a>(
                 }
                 Ok(prev.unwrap())
             }
+            ExprKind::Infix(lhs, op, rhs) => {
+                // TODO: precedence....
+                let l_obj = eval_expression(lhs, crawler, env.clone(), results.clone()).await?;
+                let r_obj = eval_expression(rhs, crawler, env.clone(), results.clone()).await?;
+                let res = eval_op(l_obj.clone(), op, r_obj.clone())?;
+                Ok(res)
+            }
             _ => Err(EvalError::InvalidExpr),
         }
     }
     .boxed()
+}
+
+fn eval_op(lhs: Arc<Object>, op: &TokenKind, rhs: Arc<Object>) -> EvalResult {
+    match (lhs.clone(), op, rhs.clone()) {
+        (_, TokenKind::EQ, _) => Ok(Arc::new(Object::Boolean(lhs == rhs))),
+        (_, TokenKind::NEQ, _) => Ok(Arc::new(Object::Boolean(lhs != rhs))),
+        _ => Err(EvalError::UnknownInfixOp),
+    }
 }
 
 impl From<fantoccini::error::CmdError> for EvalError {

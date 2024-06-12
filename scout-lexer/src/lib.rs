@@ -30,9 +30,16 @@ impl Lexer {
                 '=' => match self.peek() {
                     Some('=') => {
                         self.next();
-                        Token::new(DbEqual, "==".to_string())
+                        Token::new(EQ, "==".to_string())
                     }
-                    _ => Token::new(Equal, '='.to_string()),
+                    _ => Token::new(Assign, '='.to_string()),
+                },
+                '!' => match self.peek() {
+                    Some('=') => {
+                        self.next();
+                        Token::new(NEQ, "!=".to_string())
+                    }
+                    _ => Token::new(Illegal, '!'.to_string()),
                 },
                 '"' => {
                     let literal = self.read_string();

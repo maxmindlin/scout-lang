@@ -12,7 +12,7 @@ futures = "0.3.30"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 image = "0.25.1"
+scout-lexer = { path = "../scout-lexer/" }
 
 [dev-dependencies]
 test-case = "*"
-scout-lexer = { path = "../scout-lexer/" }

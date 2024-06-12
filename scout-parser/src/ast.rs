@@ -1,5 +1,7 @@
 use std::{collections::HashMap, fmt::Display};
 
+use scout_lexer::TokenKind;
+
 #[derive(Debug)]
 pub enum NodeKind {
     Program(Program),
@@ -33,6 +35,7 @@ pub enum ExprKind {
     SelectAll(String, Option<Identifier>),
     Call(Identifier, Vec<ExprKind>),
     Chain(Vec<ExprKind>),
+    Infix(Box<ExprKind>, TokenKind, Box<ExprKind>),
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
