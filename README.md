@@ -16,7 +16,7 @@ ScoutLang is a DSL made for web scraping, focusing on a simple and expressive sy
 
 <br>
 
-![example](./assets/sample.png)
+![example](./assets/code-sample.png)
 
 ## Iterative script building
 
