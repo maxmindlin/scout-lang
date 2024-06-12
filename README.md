@@ -10,9 +10,9 @@ ScoutLang is a DSL made for web scraping, focusing on a simple and expressive sy
 
 ## Why Scout?
 
-- Syntax with a focus on developer velocity
+- Gain access to powerful web scraping technology without needing expertise
+- A focus on developer velocity
 - Builtin debugging tools
-- Powerful web scraping technology without needing expertise
 
 <br>
 
