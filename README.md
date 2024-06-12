@@ -5,7 +5,12 @@
 </div>
 <hr>
 
-ScoutLang is a DSL made for web scraping. ScoutLang focusing on an easy to comprehend syntax along with abstracting away powerful web crawling logic, allowing users to write expressive, easy to read web scraping scripts.
+ScoutLang is a DSL made for web scraping focusing on a simple, expressive syntax. A powerful web crawling stack is abstracted away, allowing you to write easy to read, powerful scraping scripts.
 
-![example](./assets/scout.gif)
+![example](./assets/sample.png)
 
+## Iterative script building
+
+ScoutLang comes bundled with a full REPL and a powerful debugging mode, allowing you to visualize your web scraping scripts in real time.
+
+![debug](./assets/scout.gif)
