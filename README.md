@@ -1,5 +1,5 @@
 <div align="center">
-<img src="./assets/Scout.png" width="300"><br>
+<img src="./assets/scout-logo.png" width="300"><br>
 <p style="font-size:0.5em;color:#d4d4d4">A Web Crawling Programming Language</p>
 <img alt="GitHub Actions Workflow Status" src="https://img.shields.io/badge/license-MIT%2FApache-blue.svg?style=for-the-badge&label=License">
 <img alt="GitHub Actions Workflow Status" src="https://img.shields.io/github/actions/workflow/status/maxmindlin/scout-lang/ci.yml?style=for-the-badge&label=CI">
