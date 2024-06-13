@@ -20,7 +20,8 @@ pub enum BuiltinKind {
     Href,
     Trim,
     Click,
-    PrintResults,
+    Results,
+    Len,
 }
 
 impl BuiltinKind {
@@ -32,7 +33,8 @@ impl BuiltinKind {
             "trim" => Some(Trim),
             "href" => Some(Href),
             "click" => Some(Click),
-            "printResults" => Some(PrintResults),
+            "results" => Some(Results),
+            "len" => Some(Len),
             _ => None,
         }
     }
@@ -85,10 +87,20 @@ impl BuiltinKind {
                     Err(EvalError::InvalidFnParams)
                 }
             }
-            PrintResults => {
+            Results => {
                 let json = results.lock().await.to_json();
                 println!("{}", json);
                 Ok(Arc::new(Object::Null))
+            }
+            Len => {
+                assert_param_len!(args, 1);
+                let len = match &*args[0] {
+                    Object::List(v) => Ok(v.len() as f64),
+                    Object::Str(s) => Ok(s.len() as f64),
+                    _ => Err(EvalError::InvalidFnParams),
+                }?;
+
+                Ok(Arc::new(Object::Number(len)))
             }
         }
     }

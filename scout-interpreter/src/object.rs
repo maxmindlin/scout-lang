@@ -45,7 +45,13 @@ impl Display for Object {
             }
             Str(s) => write!(f, "\"{}\"", s),
             Node(_) => write!(f, "Node"),
-            List(objs) => write!(f, "[Object; {}]", objs.len()),
+            List(objs) => {
+                write!(f, "[")?;
+                for obj in objs {
+                    write!(f, "{}, ", obj)?;
+                }
+                write!(f, "]")
+            }
             Boolean(b) => write!(f, "{}", b),
             Number(n) => write!(f, "{}", n),
         }
