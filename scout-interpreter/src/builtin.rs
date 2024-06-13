@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use fantoccini::elements::Element;
-use futures::{future::BoxFuture, FutureExt};
+use futures::{future::BoxFuture, FutureExt, TryFutureExt};
 
 use crate::{object::Object, EvalError, EvalResult, ScrapeResultsPtr};
 
@@ -22,6 +22,7 @@ pub enum BuiltinKind {
     Click,
     Results,
     Len,
+    Input,
 }
 
 impl BuiltinKind {
@@ -35,6 +36,7 @@ impl BuiltinKind {
             "click" => Some(Click),
             "results" => Some(Results),
             "len" => Some(Len),
+            "input" => Some(Input),
             _ => None,
         }
     }
@@ -101,6 +103,18 @@ impl BuiltinKind {
                 }?;
 
                 Ok(Arc::new(Object::Number(len)))
+            }
+            Input => {
+                assert_param_len!(args, 2);
+                match (&*args[0], &*args[1]) {
+                    (Object::Node(elem), Object::Str(s)) => {
+                        elem.send_keys(s)
+                            .map_err(|_| EvalError::BrowserError)
+                            .await?;
+                        Ok(Arc::new(Object::Null))
+                    }
+                    _ => Err(EvalError::InvalidFnParams),
+                }
             }
         }
     }
