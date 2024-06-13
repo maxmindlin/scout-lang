@@ -25,3 +25,15 @@ ScoutLang is a DSL made for web scraping, focusing on a simple and expressive sy
 ScoutLang comes bundled with a full REPL and a powerful debugging mode, allowing you to visualize your web scraping scripts in real time. 
 
 ![debug](./assets/scout.gif)
+
+# Installation
+
+Eventually Scout installation will come bundled with the necessary pre-reqs. For now, you will need:
+- Some version of FireFox
+- [Geckodriver](https://github.com/mozilla/geckodriver)
+
+See [Releases](https://github.com/maxmindlin/scout-lang/releases) for up to date Scout binary installation instructions.
+
+# License
+
+Scout is dual-licensed with MIT & Apache 2.0, at your option.
