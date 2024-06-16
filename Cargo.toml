@@ -34,6 +34,7 @@ colored = "2"
 fantoccini = "0.19.3"
 tokio = { version = "1", features = ["full"] }
 serde_json = "1.0"
+clap = { version = "4.5.7", features = ["derive"] }
 
 # The profile that 'cargo dist' will build with
 [profile.dist]

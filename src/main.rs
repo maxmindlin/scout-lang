@@ -1,5 +1,6 @@
-use std::{env, fs, process::Command, sync::Arc};
+use std::{fs, process::Command, sync::Arc};
 
+use clap::Parser as CLIParser;
 use futures::lock::Mutex;
 use repl::run_repl;
 use scout_interpreter::{env::Env, eval, ScrapeResultsPtr};
@@ -8,16 +9,23 @@ use scout_parser::{ast::NodeKind, Parser};
 
 mod repl;
 
+#[derive(CLIParser, Debug)]
+struct Args {
+    file: Option<String>,
+
+    #[arg(long)]
+    debug: bool,
+}
+
 async fn run(
-    args: Vec<String>,
+    file: Option<String>,
     crawler: &fantoccini::Client,
     results: ScrapeResultsPtr,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    match args.len() {
-        1 => run_repl(crawler, results).await,
-        2 => {
-            let filename = &args[1];
-            let contents = fs::read_to_string(filename)?;
+    match file {
+        None => run_repl(crawler, results).await,
+        Some(f) => {
+            let contents = fs::read_to_string(f)?;
 
             let lex = Lexer::new(&contents);
             let mut parser = Parser::new(lex);
@@ -34,12 +42,13 @@ async fn run(
                 Err(e) => Err(format!("Parser error: {:#?}", e).into()),
             }
         }
-        _ => Err("Unsupported number of args".into()),
     }
 }
 
 #[tokio::main]
 async fn main() {
+    let args = Args::parse();
+
     let child = Command::new("geckodriver")
         .arg("--port")
         .arg("4444")
@@ -51,14 +60,19 @@ async fn main() {
     // sleep to allow driver to start
     std::thread::sleep(std::time::Duration::from_millis(50));
 
+    let mut caps = serde_json::map::Map::new();
+    if !args.debug {
+        let opts = serde_json::json!({ "args": ["--headless"] });
+        caps.insert("moz:firefoxOptions".into(), opts);
+    }
     let crawler = fantoccini::ClientBuilder::native()
+        .capabilities(caps)
         .connect("http://localhost:4444")
         .await
         .expect("error starting browser");
 
     let results = ScrapeResultsPtr::default();
-    let args: Vec<String> = env::args().collect();
-    if let Err(e) = run(args, &crawler, results.clone()).await {
+    if let Err(e) = run(args.file, &crawler, results.clone()).await {
         println!("Error: {}", e);
     }
     let json_results = results.lock().await.to_json();

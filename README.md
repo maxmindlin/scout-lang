@@ -34,6 +34,10 @@ Eventually Scout installation will come bundled with the necessary pre-reqs. For
 
 See [Releases](https://github.com/maxmindlin/scout-lang/releases) for up to date Scout binary installation instructions.
 
+# Usage
+
+The `scout` binary ran with a filename will read and interpret a script file. Without a script will start the REPL. Run `scout --help` to see additional options.
+
 # License
 
 Scout is dual-licensed with MIT & Apache 2.0, at your option.
