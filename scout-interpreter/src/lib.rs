@@ -101,10 +101,16 @@ fn eval_statement<'a>(
 ) -> BoxFuture<'a, EvalResult> {
     async move {
         match stmt {
-            StmtKind::Goto(url) => {
-                if crawler.goto(url.as_str()).await.is_err() {
-                    return Err(EvalError::InvalidUrl);
-                };
+            StmtKind::Goto(expr) => {
+                if let Object::Str(url) =
+                    &*eval_expression(expr, crawler, env.clone(), results.clone()).await?
+                {
+                    if crawler.goto(url.as_str()).await.is_err() {
+                        return Err(EvalError::InvalidUrl);
+                    };
+                } else {
+                    return Err(EvalError::InvalidFnParams);
+                }
 
                 // @TODO: Need a better way to determine that a page is "done"
                 sleep(Duration::from_secs(1));
@@ -211,7 +217,7 @@ fn apply_call<'a>(
             obj_params.insert(0, obj);
         }
         match BuiltinKind::is_from(&ident.name) {
-            Some(builtin) => builtin.apply(results.clone(), obj_params).await,
+            Some(builtin) => builtin.apply(crawler, results.clone(), obj_params).await,
             None => Err(EvalError::UnknownIdent),
         }
     }

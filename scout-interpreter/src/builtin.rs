@@ -1,13 +1,17 @@
 use std::sync::Arc;
 
-use fantoccini::elements::Element;
+use fantoccini::{
+    actions::{InputSource, KeyAction, KeyActions},
+    elements::Element,
+    key::Key,
+};
 use futures::{future::BoxFuture, FutureExt, TryFutureExt};
 
 use crate::{object::Object, EvalError, EvalResult, ScrapeResultsPtr};
 
 macro_rules! assert_param_len {
     ($arg:expr, $len:expr) => {
-        if $arg.len() != $len {
+        if $arg.len() < $len {
             return Err($crate::EvalError::InvalidFnParams);
         }
     };
@@ -23,6 +27,7 @@ pub enum BuiltinKind {
     Results,
     Len,
     Input,
+    Contains,
 }
 
 impl BuiltinKind {
@@ -37,11 +42,17 @@ impl BuiltinKind {
             "results" => Some(Results),
             "len" => Some(Len),
             "input" => Some(Input),
+            "contains" => Some(Contains),
             _ => None,
         }
     }
 
-    pub async fn apply(&self, results: ScrapeResultsPtr, args: Vec<Arc<Object>>) -> EvalResult {
+    pub async fn apply(
+        &self,
+        crawler: &fantoccini::Client,
+        results: ScrapeResultsPtr,
+        args: Vec<Arc<Object>>,
+    ) -> EvalResult {
         use BuiltinKind::*;
         match self {
             Print => {
@@ -111,7 +122,32 @@ impl BuiltinKind {
                         elem.send_keys(s)
                             .map_err(|_| EvalError::BrowserError)
                             .await?;
+
+                        if args.len() > 2 && args[2].is_truthy() {
+                            let actions =
+                                KeyActions::new("enter".to_owned()).then(KeyAction::Down {
+                                    value: Key::Return.into(),
+                                });
+                            crawler.perform_actions(actions).await?;
+                        }
                         Ok(Arc::new(Object::Null))
+                    }
+                    _ => Err(EvalError::InvalidFnParams),
+                }
+            }
+            Contains => {
+                assert_param_len!(args, 2);
+                match &*args[0] {
+                    Object::Str(s) => match &*args[1] {
+                        Object::Str(sub) => {
+                            let contains = s.contains(sub);
+                            Ok(Arc::new(Object::Boolean(contains)))
+                        }
+                        _ => Err(EvalError::InvalidFnParams),
+                    },
+                    Object::List(v) => {
+                        let contains = v.contains(&args[1]);
+                        Ok(Arc::new(Object::Boolean(contains)))
                     }
                     _ => Err(EvalError::InvalidFnParams),
                 }

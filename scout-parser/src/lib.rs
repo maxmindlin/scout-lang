@@ -118,8 +118,9 @@ impl Parser {
 
     /// `goto "https://stackoverflow.com"`
     fn parse_goto_stmt(&mut self) -> ParseResult<StmtKind> {
-        self.expect_peek(TokenKind::Str)?;
-        let stmt = StmtKind::Goto(self.curr.literal.clone());
+        self.next_token();
+        let url = self.parse_expr()?;
+        let stmt = StmtKind::Goto(url);
         Ok(stmt)
     }
 
@@ -258,6 +259,9 @@ impl Parser {
         let mut params = Vec::new();
         while self.peek.kind == TokenKind::Comma || self.peek.kind != TokenKind::RParen {
             self.next_token();
+            if self.curr.kind == TokenKind::Comma {
+                self.next_token();
+            }
             let param = self.parse_expr()?;
             params.push(param);
         }
@@ -287,7 +291,7 @@ mod tests {
         stmts[0].clone()
     }
 
-    #[test_case(r#"goto "foo""#, StmtKind::Goto("foo".into()))]
+    #[test_case(r#"goto "foo""#, StmtKind::Goto(ExprKind::Str("foo".into())))]
     #[test_case("scrape {}", StmtKind::Scrape(HashLiteral::default()))]
     #[test_case(
         r#"scrape { a: $"b" }"#,
@@ -388,6 +392,18 @@ mod tests {
         StmtKind::Assign(
             Identifier::new("x".to_string()),
             ExprKind::Infix(Box::new(ExprKind::Number(1.)), TokenKind::EQ, Box::new(ExprKind::Number(2.)))
+        )
+    )]
+    #[test_case(
+        r#"f(a, b)"#,
+        StmtKind::Expr(
+            ExprKind::Call(
+                Identifier::new("f".into()),
+                vec![
+                    ExprKind::Ident(Identifier::new("a".into())),
+                    ExprKind::Ident(Identifier::new("b".into()))
+                ]
+            )
         )
     )]
     #[test_case(

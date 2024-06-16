@@ -66,6 +66,14 @@ impl Lexer {
                     },
                     None => Token::new(Illegal, '$'.to_string()),
                 },
+                '/' => match self.peek() {
+                    Some('/') => {
+                        while self.next() != Some(&'\n') {}
+
+                        self.next_token()
+                    }
+                    _ => Token::new(Illegal, '/'.to_string()),
+                },
                 _ if c.is_whitespace() => self.next_token(),
                 _ if c.is_numeric() => {
                     let lit = self.read_numeric();
@@ -152,6 +160,7 @@ mod tests {
     use TokenKind::*;
 
     #[test_case("for", vec!(Token::new(For, "for".into())))]
+    #[test_case("// fdsafds dew 123\n//1 2dsa\nfor", vec!(Token::new(For, "for".into())))]
     #[test_case("x", vec!(Token::new(Ident, "x".into())))]
     #[test_case("for x", vec!(Token::new(For, "for".into()), Token::new(Ident, "x".into())))]
     #[test_case("\"x\"", vec!(Token::new(Str, "x".into())))]
