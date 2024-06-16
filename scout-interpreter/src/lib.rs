@@ -332,7 +332,7 @@ fn eval_expression<'a>(
                 let res = eval_op(l_obj.clone(), op, r_obj.clone())?;
                 Ok(res)
             }
-            _ => Err(EvalError::InvalidExpr),
+            ExprKind::Boolean(val) => Ok(Arc::new(Object::Boolean(*val))),
         }
     }
     .boxed()

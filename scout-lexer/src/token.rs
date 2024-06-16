@@ -29,6 +29,8 @@ pub enum TokenKind {
     Goto,
     Scrape,
     Screenshot,
+    True,
+    False,
 }
 
 impl TokenKind {
@@ -43,6 +45,8 @@ impl TokenKind {
             "goto" => Some(Goto),
             "scrape" => Some(Scrape),
             "screenshot" => Some(Screenshot),
+            "true" => Some(True),
+            "false" => Some(False),
             _ => None,
         }
     }

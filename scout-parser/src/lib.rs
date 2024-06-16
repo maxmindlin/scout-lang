@@ -166,6 +166,8 @@ impl Parser {
 
     fn parse_single_expr(&mut self) -> ParseResult<ExprKind> {
         let lhs = match self.curr.kind {
+            TokenKind::False => Ok(ExprKind::Boolean(false)),
+            TokenKind::True => Ok(ExprKind::Boolean(true)),
             TokenKind::Ident => {
                 // Parse multiple types of ident expressions
                 match self.peek.kind {
