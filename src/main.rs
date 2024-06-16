@@ -15,6 +15,9 @@ struct Args {
 
     #[arg(long)]
     debug: bool,
+
+    #[arg(short, long, default_value_t = 4444)]
+    port: usize,
 }
 
 async fn run(
@@ -51,7 +54,7 @@ async fn main() {
 
     let child = Command::new("geckodriver")
         .arg("--port")
-        .arg("4444")
+        .arg(args.port.to_string())
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .spawn()
@@ -65,9 +68,10 @@ async fn main() {
         let opts = serde_json::json!({ "args": ["--headless"] });
         caps.insert("moz:firefoxOptions".into(), opts);
     }
+    let conn_url = format!("http://localhost:{}", args.port);
     let crawler = fantoccini::ClientBuilder::native()
         .capabilities(caps)
-        .connect("http://localhost:4444")
+        .connect(&conn_url)
         .await
         .expect("error starting browser");
 
