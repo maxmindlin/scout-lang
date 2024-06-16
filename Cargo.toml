@@ -10,7 +10,12 @@ ci = "github"
 # The installers to generate for each app
 installers = ["shell"]
 # Target platforms to build apps for (Rust target-triple syntax)
-targets = ["aarch64-apple-darwin", "x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc"]
+targets = [
+  "aarch64-apple-darwin",
+  "x86_64-apple-darwin",
+  "x86_64-unknown-linux-gnu",
+  "x86_64-pc-windows-msvc",
+]
 # Publish jobs to run in CI
 pr-run-mode = "plan"
 # Whether to install an updater program
@@ -18,7 +23,7 @@ install-updater = false
 
 [package]
 name = "scout"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 repository = "https://github.com/maxmindlin/scout-lang"
 
@@ -40,4 +45,3 @@ clap = { version = "4.5.7", features = ["derive"] }
 [profile.dist]
 inherits = "release"
 lto = "thin"
-
