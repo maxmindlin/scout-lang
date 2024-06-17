@@ -32,6 +32,8 @@ pub enum TokenKind {
     True,
     False,
     Def,
+    Null,
+    Return,
 }
 
 impl TokenKind {
@@ -49,6 +51,8 @@ impl TokenKind {
             "true" => Some(True),
             "false" => Some(False),
             "def" => Some(Def),
+            "null" => Some(Null),
+            "return" => Some(Return),
             _ => None,
         }
     }

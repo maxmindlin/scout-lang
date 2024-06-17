@@ -84,13 +84,8 @@ async fn eval_program(
     env: EnvPointer,
     results: ScrapeResultsPtr,
 ) -> EvalResult {
-    let mut res = Arc::new(Object::Null);
-    for stmt in prgm.stmts {
-        res = eval_statement(&stmt, crawler, env.clone(), results.clone())
-            .await?
-            .clone();
-    }
-    Ok(res)
+    let block = Block::new(prgm.stmts);
+    eval_block(&block, crawler, env.clone(), results.clone()).await
 }
 
 fn eval_statement<'a>(
@@ -184,6 +179,10 @@ fn eval_statement<'a>(
                 env.lock().await.set(&def.ident, Arc::new(lit)).await;
                 Ok(Arc::new(Object::Null))
             }
+            StmtKind::Return(rv) => match rv {
+                None => Ok(Arc::new(Object::Null)),
+                Some(expr) => eval_expression(expr, crawler, env.clone(), results.clone()).await,
+            },
         }
     }
     .boxed()
@@ -197,9 +196,21 @@ async fn eval_block(
 ) -> EvalResult {
     let mut res = Arc::new(Object::Null);
     for stmt in &block.stmts {
-        res = eval_statement(stmt, crawler, env.clone(), results.clone())
-            .await?
-            .clone();
+        match stmt {
+            StmtKind::Return(rv) => {
+                return match rv {
+                    None => Ok(Arc::new(Object::Null)),
+                    Some(expr) => {
+                        eval_expression(expr, crawler, env.clone(), results.clone()).await
+                    }
+                }
+            }
+            _ => {
+                res = eval_statement(stmt, crawler, env.clone(), results.clone())
+                    .await?
+                    .clone()
+            }
+        }
     }
     Ok(res)
 }
@@ -360,6 +371,7 @@ fn eval_expression<'a>(
                 Ok(res)
             }
             ExprKind::Boolean(val) => Ok(Arc::new(Object::Boolean(*val))),
+            ExprKind::Null => Ok(Arc::new(Object::Null)),
         }
     }
     .boxed()

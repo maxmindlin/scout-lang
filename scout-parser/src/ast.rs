@@ -24,6 +24,7 @@ pub enum StmtKind {
     Assign(Identifier, ExprKind),
     Screenshot(String),
     Func(FuncDef),
+    Return(Option<ExprKind>),
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -32,6 +33,7 @@ pub enum ExprKind {
     Number(f64),
     Boolean(bool),
     Ident(Identifier),
+    Null,
     Select(String, Option<Identifier>),
     SelectAll(String, Option<Identifier>),
     Call(Identifier, Vec<ExprKind>),

@@ -18,6 +18,9 @@ struct Args {
 
     #[arg(short, long, default_value_t = 4444)]
     port: usize,
+
+    #[arg(long)]
+    proxy: Option<String>,
 }
 
 async fn run(
@@ -67,6 +70,13 @@ async fn main() {
     if !args.debug {
         let opts = serde_json::json!({ "args": ["--headless"] });
         caps.insert("moz:firefoxOptions".into(), opts);
+    }
+    if let Some(proxy) = args.proxy {
+        let opt = serde_json::json!({
+            "proxyType": "manual",
+            "httpProxy": proxy,
+        });
+        caps.insert("proxy".into(), opt);
     }
     let conn_url = format!("http://localhost:{}", args.port);
     let crawler = fantoccini::ClientBuilder::native()

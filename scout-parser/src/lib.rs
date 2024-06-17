@@ -97,6 +97,14 @@ impl Parser {
                 }
                 _ => self.parse_expr_stmt(),
             },
+            TokenKind::Return => {
+                self.next_token();
+                match self.parse_expr() {
+                    Ok(expr) => Ok(StmtKind::Return(Some(expr))),
+                    Err(ParseError::InvalidToken(_)) => Ok(StmtKind::Return(None)),
+                    Err(e) => Err(e),
+                }
+            }
             _ => self.parse_expr_stmt(),
         }
     }
@@ -249,6 +257,7 @@ impl Parser {
                     .parse()
                     .map_err(|_| ParseError::InvalidNumber)?,
             )),
+            TokenKind::Null => Ok(ExprKind::Null),
             _ => Err(ParseError::InvalidToken(self.curr.kind)),
         }?;
 
