@@ -193,12 +193,13 @@ fn eval_statement<'a>(
                     Object::Str(f_str) => {
                         let curr_dir = std::env::current_dir().map_err(|_| EvalError::OSError)?;
                         let f_path = std::path::Path::new(f_str);
-                        let path = curr_dir.join(f_path);
+                        let mut path = curr_dir.join(f_path);
+                        path.set_extension("sct");
                         match path.to_str() {
                             Some(path) => {
-                                let file =
+                                let content =
                                     fs::read_to_string(path).map_err(|_| EvalError::OSError)?;
-                                let lex = Lexer::new(&file);
+                                let lex = Lexer::new(&content);
                                 let mut parser = Parser::new(lex);
                                 match parser.parse_program() {
                                     Ok(prgm) => {
