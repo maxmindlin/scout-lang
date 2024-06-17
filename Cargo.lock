@@ -1528,7 +1528,7 @@ checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
 
 [[package]]
 name = "scout"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "clap",
  "colored",
@@ -1544,7 +1544,7 @@ dependencies = [
 
 [[package]]
 name = "scout-interpreter"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "fantoccini",
  "futures",
@@ -1558,14 +1558,14 @@ dependencies = [
 
 [[package]]
 name = "scout-lexer"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "test-case",
 ]
 
 [[package]]
 name = "scout-parser"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "scout-lexer",
  "test-case",
