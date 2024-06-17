@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use ast::{ExprKind, ForLoop, HashLiteral, Identifier, Program, StmtKind};
+use ast::{ExprKind, ForLoop, FuncDef, HashLiteral, Identifier, Program, StmtKind};
 use scout_lexer::{Lexer, Token, TokenKind};
 
 use crate::ast::Block;
@@ -55,6 +55,33 @@ impl Parser {
 
     fn parse_stmt(&mut self) -> ParseResult<StmtKind> {
         match self.curr.kind {
+            TokenKind::Def => {
+                self.expect_peek(TokenKind::Ident)?;
+                let ident = Identifier::new(self.curr.literal.clone());
+                self.expect_peek(TokenKind::LParen)?;
+
+                let mut args = Vec::new();
+                while self.peek.kind == TokenKind::Comma || self.peek.kind != TokenKind::RParen {
+                    self.next_token();
+                    match self.curr.kind {
+                        TokenKind::Comma => {}
+                        TokenKind::Ident => {
+                            args.push(Identifier::new(self.curr.literal.clone()));
+                        }
+                        _ => {
+                            return Err(ParseError::InvalidToken(self.curr.kind));
+                        }
+                    }
+                }
+
+                self.expect_peek(TokenKind::RParen)?;
+                self.expect_peek(TokenKind::Do)?;
+                self.next_token();
+
+                let block = self.parse_block()?;
+
+                Ok(StmtKind::Func(FuncDef::new(ident, args, block)))
+            }
             TokenKind::Goto => self.parse_goto_stmt(),
             TokenKind::Scrape => self.parse_scrape_stmt(),
             TokenKind::For => self.parse_for_loop(),
@@ -411,6 +438,30 @@ mod tests {
     #[test_case(
         r#"if 1 do end"#,
         StmtKind::If(ExprKind::Number(1.), Block::new(vec![]))
+    )]
+    #[test_case(
+        r#"def f() do end"#,
+        StmtKind::Func(
+            FuncDef::new(
+                Identifier::new("f".into()),
+                vec![
+                ],
+                Block::default()
+            )
+        )
+    )]
+    #[test_case(
+        r#"def f(a, b) do end"#,
+        StmtKind::Func(
+            FuncDef::new(
+                Identifier::new("f".into()),
+                vec![
+                    Identifier::new("a".into()),
+                    Identifier::new("b".into())
+                ],
+                Block::default()
+            )
+        )
     )]
     fn test_single_stmt(input: &str, exp: StmtKind) {
         let stmt = extract_first_stmt(input);

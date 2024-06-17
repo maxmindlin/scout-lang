@@ -23,6 +23,7 @@ pub enum StmtKind {
     If(ExprKind, Block),
     Assign(Identifier, ExprKind),
     Screenshot(String),
+    Func(FuncDef),
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -46,6 +47,19 @@ pub struct Identifier {
 impl Identifier {
     pub fn new(name: String) -> Self {
         Self { name }
+    }
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct FuncDef {
+    pub ident: Identifier,
+    pub args: Vec<Identifier>,
+    pub body: Block,
+}
+
+impl FuncDef {
+    pub fn new(ident: Identifier, args: Vec<Identifier>, body: Block) -> Self {
+        Self { ident, args, body }
     }
 }
 

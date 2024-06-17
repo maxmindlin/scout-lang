@@ -1,6 +1,6 @@
 use std::{collections::HashMap, fmt::Display, sync::Arc};
 
-use scout_parser::ast::Identifier;
+use scout_parser::ast::{Block, Identifier};
 use serde_json::{json, Value};
 
 #[derive(Debug)]
@@ -12,6 +12,7 @@ pub enum Object {
     List(Vec<Arc<Object>>),
     Boolean(bool),
     Number(f64),
+    Fn(Vec<Identifier>, Block),
 }
 
 impl PartialEq for Object {
@@ -54,6 +55,7 @@ impl Display for Object {
             }
             Boolean(b) => write!(f, "{}", b),
             Number(n) => write!(f, "{}", n),
+            Fn(_, _) => write!(f, "Func"),
         }
     }
 }
@@ -70,6 +72,7 @@ impl Object {
             Map(map) => Value::Object(obj_map_to_json(map)),
             Boolean(b) => Value::Bool(*b),
             Number(n) => json!(n),
+            Fn(_, _) => panic!("cant deserialize func"),
         }
     }
 
@@ -84,6 +87,7 @@ impl Object {
             Boolean(b) => *b,
             // @TODO: Idk what truthiness of floats should be
             Number(n) => *n > 0.0,
+            Fn(_, _) => true,
         }
     }
 }

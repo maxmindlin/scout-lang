@@ -179,6 +179,11 @@ fn eval_statement<'a>(
 
                 Ok(Arc::new(Object::Null))
             }
+            StmtKind::Func(def) => {
+                let lit = Object::Fn(def.args.clone(), def.body.clone());
+                env.lock().await.set(&def.ident, Arc::new(lit)).await;
+                Ok(Arc::new(Object::Null))
+            }
         }
     }
     .boxed()
@@ -216,9 +221,31 @@ fn apply_call<'a>(
         if let Some(obj) = prev {
             obj_params.insert(0, obj);
         }
-        match BuiltinKind::is_from(&ident.name) {
-            Some(builtin) => builtin.apply(crawler, results.clone(), obj_params).await,
-            None => Err(EvalError::UnknownIdent),
+
+        let env_res = env.lock().await.get(ident).await;
+        match env_res {
+            Some(obj) => match &*obj {
+                Object::Fn(idents, block) => {
+                    if idents.len() != obj_params.len() {
+                        return Err(EvalError::InvalidUsage);
+                    }
+
+                    let mut scope = Env::default();
+                    scope.add_outer(env.clone()).await;
+                    for i in 0..idents.len() {
+                        let id = &idents[i];
+                        let obj = &obj_params[i];
+                        scope.set(id, obj.clone()).await;
+                    }
+
+                    eval_block(block, crawler, Arc::new(Mutex::new(scope)), results.clone()).await
+                }
+                _ => Err(EvalError::InvalidExpr),
+            },
+            None => match BuiltinKind::is_from(&ident.name) {
+                Some(builtin) => builtin.apply(crawler, results.clone(), obj_params).await,
+                None => Err(EvalError::UnknownIdent),
+            },
         }
     }
     .boxed()

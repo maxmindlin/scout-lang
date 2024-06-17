@@ -31,6 +31,7 @@ pub enum TokenKind {
     Screenshot,
     True,
     False,
+    Def,
 }
 
 impl TokenKind {
@@ -47,6 +48,7 @@ impl TokenKind {
             "screenshot" => Some(Screenshot),
             "true" => Some(True),
             "false" => Some(False),
+            "def" => Some(Def),
             _ => None,
         }
     }
