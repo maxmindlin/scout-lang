@@ -378,9 +378,21 @@ fn eval_expression<'a>(
 }
 
 fn eval_op(lhs: Arc<Object>, op: &TokenKind, rhs: Arc<Object>) -> EvalResult {
-    match (lhs.clone(), op, rhs.clone()) {
+    match (&*lhs, op, &*rhs) {
         (_, TokenKind::EQ, _) => Ok(Arc::new(Object::Boolean(lhs == rhs))),
         (_, TokenKind::NEQ, _) => Ok(Arc::new(Object::Boolean(lhs != rhs))),
+        (_, TokenKind::Plus, _) => eval_plus_op(lhs, rhs),
+        _ => Err(EvalError::UnknownInfixOp),
+    }
+}
+
+fn eval_plus_op(lhs: Arc<Object>, rhs: Arc<Object>) -> EvalResult {
+    match (&*lhs, &*rhs) {
+        (Object::Str(a), Object::Str(b)) => {
+            let res = format!("{a}{b}");
+            Ok(Arc::new(Object::Str(res)))
+        }
+        (Object::Number(a), Object::Number(b)) => Ok(Arc::new(Object::Number(a + b))),
         _ => Err(EvalError::UnknownInfixOp),
     }
 }

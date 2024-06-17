@@ -19,6 +19,7 @@ pub enum TokenKind {
     Assign,
     EQ,
     NEQ,
+    Plus,
 
     // Keywords
     If,
@@ -62,6 +63,7 @@ impl TokenKind {
         match self {
             EQ => true,
             NEQ => true,
+            Plus => true,
             _ => false,
         }
     }
