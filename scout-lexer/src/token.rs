@@ -20,6 +20,9 @@ pub enum TokenKind {
     EQ,
     NEQ,
     Plus,
+    Minus,
+    Asterisk,
+    Slash,
 
     // Keywords
     If,
@@ -35,6 +38,7 @@ pub enum TokenKind {
     Def,
     Null,
     Return,
+    Use,
 }
 
 impl TokenKind {
@@ -54,6 +58,7 @@ impl TokenKind {
             "def" => Some(Def),
             "null" => Some(Null),
             "return" => Some(Return),
+            "use" => Some(Use),
             _ => None,
         }
     }
@@ -64,6 +69,9 @@ impl TokenKind {
             EQ => true,
             NEQ => true,
             Plus => true,
+            Minus => true,
+            Asterisk => true,
+            Slash => true,
             _ => false,
         }
     }

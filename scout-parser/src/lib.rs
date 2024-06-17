@@ -105,6 +105,7 @@ impl Parser {
                     Err(e) => Err(e),
                 }
             }
+            TokenKind::Use => self.parse_use_stmt(),
             _ => self.parse_expr_stmt(),
         }
     }
@@ -136,19 +137,18 @@ impl Parser {
         self.next_token();
         let iterable = self.parse_expr()?;
         self.expect_peek(TokenKind::Do)?;
-        // let mut stmts = Vec::new();
         self.next_token();
         let block = self.parse_block()?;
-        // while self.curr.kind != TokenKind::End {
-        //     let stmt = self.parse_stmt()?;
-        //     stmts.push(stmt);
-        //     self.next_token();
-        // }
-        // let block = Block::new(stmts);
 
         self.next_token();
         let floop = ForLoop::new(ident, iterable, block);
         Ok(StmtKind::ForLoop(floop))
+    }
+
+    fn parse_use_stmt(&mut self) -> ParseResult<StmtKind> {
+        self.next_token();
+        let import = self.parse_expr()?;
+        Ok(StmtKind::Use(import))
     }
 
     /// `goto "https://stackoverflow.com"`

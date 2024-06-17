@@ -1,3 +1,4 @@
+use std::fs;
 use std::thread::sleep;
 use std::time::Duration;
 use std::{collections::HashMap, sync::Arc};
@@ -7,8 +8,9 @@ use fantoccini::Locator;
 use futures::lock::Mutex;
 use futures::{future::BoxFuture, FutureExt};
 use object::{obj_map_to_json, Object};
-use scout_lexer::TokenKind;
+use scout_lexer::{Lexer, TokenKind};
 use scout_parser::ast::{Block, ExprKind, Identifier, NodeKind, Program, StmtKind};
+use scout_parser::Parser;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
 
@@ -50,10 +52,11 @@ impl ScrapeResults {
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum EvalError {
     TypeMismatch,
-    InvalidUsage,
+    InvalidUsage(String),
     InvalidFnParams,
     InvalidExpr,
     InvalidUrl,
+    InvalidImport,
     NonFunction,
     UnknownIdent,
     UnknownPrefixOp,
@@ -62,6 +65,7 @@ pub enum EvalError {
     NonIterable,
     ScreenshotError,
     BrowserError,
+    OSError,
 }
 
 pub async fn eval(
@@ -183,6 +187,38 @@ fn eval_statement<'a>(
                 None => Ok(Arc::new(Object::Null)),
                 Some(expr) => eval_expression(expr, crawler, env.clone(), results.clone()).await,
             },
+            StmtKind::Use(import) => {
+                let file = eval_expression(import, crawler, env.clone(), results.clone()).await?;
+                match &*file {
+                    Object::Str(f_str) => {
+                        let curr_dir = std::env::current_dir().map_err(|_| EvalError::OSError)?;
+                        let f_path = std::path::Path::new(f_str);
+                        let path = curr_dir.join(f_path);
+                        match path.to_str() {
+                            Some(path) => {
+                                let file =
+                                    fs::read_to_string(path).map_err(|_| EvalError::OSError)?;
+                                let lex = Lexer::new(&file);
+                                let mut parser = Parser::new(lex);
+                                match parser.parse_program() {
+                                    Ok(prgm) => {
+                                        eval(
+                                            NodeKind::Program(prgm),
+                                            crawler,
+                                            env.clone(),
+                                            results.clone(),
+                                        )
+                                        .await
+                                    }
+                                    Err(_) => Err(EvalError::InvalidImport),
+                                }
+                            }
+                            None => Err(EvalError::InvalidImport),
+                        }
+                    }
+                    _ => Err(EvalError::InvalidImport),
+                }
+            }
         }
     }
     .boxed()
@@ -238,7 +274,7 @@ fn apply_call<'a>(
             Some(obj) => match &*obj {
                 Object::Fn(idents, block) => {
                     if idents.len() != obj_params.len() {
-                        return Err(EvalError::InvalidUsage);
+                        return Err(EvalError::InvalidUsage("Non-matching arg counts".into()));
                     }
 
                     let mut scope = Env::default();
@@ -300,7 +336,7 @@ fn eval_expression<'a>(
                         }
                         Err(_) => Ok(Arc::new(Object::Null)),
                     },
-                    Some(_) => Err(EvalError::InvalidUsage),
+                    Some(_) => Err(EvalError::InvalidUsage("Cannot select non-node".into())),
                     None => Err(EvalError::UnknownIdent),
                 },
                 None => match crawler.find(Locator::Css(selector)).await {
@@ -325,7 +361,7 @@ fn eval_expression<'a>(
                         }
                         Err(_) => Ok(Arc::new(Object::Null)),
                     },
-                    Some(_) => Err(EvalError::InvalidUsage),
+                    Some(_) => Err(EvalError::InvalidUsage("cannot select non-node".into())),
                     None => Err(EvalError::UnknownIdent),
                 },
                 None => match crawler.find_all(Locator::Css(selector)).await {
@@ -378,10 +414,13 @@ fn eval_expression<'a>(
 }
 
 fn eval_op(lhs: Arc<Object>, op: &TokenKind, rhs: Arc<Object>) -> EvalResult {
-    match (&*lhs, op, &*rhs) {
-        (_, TokenKind::EQ, _) => Ok(Arc::new(Object::Boolean(lhs == rhs))),
-        (_, TokenKind::NEQ, _) => Ok(Arc::new(Object::Boolean(lhs != rhs))),
-        (_, TokenKind::Plus, _) => eval_plus_op(lhs, rhs),
+    match op {
+        TokenKind::EQ => Ok(Arc::new(Object::Boolean(lhs == rhs))),
+        TokenKind::NEQ => Ok(Arc::new(Object::Boolean(lhs != rhs))),
+        TokenKind::Plus => eval_plus_op(lhs, rhs),
+        TokenKind::Minus => eval_minus_op(lhs, rhs),
+        TokenKind::Asterisk => eval_asterisk_op(lhs, rhs),
+        TokenKind::Slash => eval_slash_op(lhs, rhs),
         _ => Err(EvalError::UnknownInfixOp),
     }
 }
@@ -393,6 +432,27 @@ fn eval_plus_op(lhs: Arc<Object>, rhs: Arc<Object>) -> EvalResult {
             Ok(Arc::new(Object::Str(res)))
         }
         (Object::Number(a), Object::Number(b)) => Ok(Arc::new(Object::Number(a + b))),
+        _ => Err(EvalError::UnknownInfixOp),
+    }
+}
+
+fn eval_minus_op(lhs: Arc<Object>, rhs: Arc<Object>) -> EvalResult {
+    match (&*lhs, &*rhs) {
+        (Object::Number(a), Object::Number(b)) => Ok(Arc::new(Object::Number(a - b))),
+        _ => Err(EvalError::UnknownInfixOp),
+    }
+}
+
+fn eval_asterisk_op(lhs: Arc<Object>, rhs: Arc<Object>) -> EvalResult {
+    match (&*lhs, &*rhs) {
+        (Object::Number(a), Object::Number(b)) => Ok(Arc::new(Object::Number(a * b))),
+        _ => Err(EvalError::UnknownInfixOp),
+    }
+}
+
+fn eval_slash_op(lhs: Arc<Object>, rhs: Arc<Object>) -> EvalResult {
+    match (&*lhs, &*rhs) {
+        (Object::Number(a), Object::Number(b)) => Ok(Arc::new(Object::Number(a / b))),
         _ => Err(EvalError::UnknownInfixOp),
     }
 }

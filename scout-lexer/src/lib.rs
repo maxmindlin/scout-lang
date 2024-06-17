@@ -28,6 +28,8 @@ impl Lexer {
                 ':' => Token::new(Colon, c.to_string()),
                 ',' => Token::new(Comma, c.to_string()),
                 '+' => Token::new(Plus, c.to_string()),
+                '-' => Token::new(Minus, c.to_string()),
+                '*' => Token::new(Asterisk, c.to_string()),
                 '=' => match self.peek() {
                     Some('=') => {
                         self.next();
@@ -73,7 +75,7 @@ impl Lexer {
 
                         self.next_token()
                     }
-                    _ => Token::new(Illegal, '/'.to_string()),
+                    _ => Token::new(Slash, '/'.to_string()),
                 },
                 _ if c.is_whitespace() => self.next_token(),
                 _ if c.is_numeric() => {

@@ -168,7 +168,9 @@ async fn apply_elem_fn(
                 if let Object::Node(elem) = &*obj.clone() {
                     res.push(Arc::new(f(elem).await));
                 } else {
-                    return Err(EvalError::InvalidUsage);
+                    return Err(EvalError::InvalidUsage(
+                        "cannot run builtin node fn against non-node".into(),
+                    ));
                 }
             }
             Ok(Arc::new(Object::List(res)))
