@@ -28,6 +28,7 @@ pub enum BuiltinKind {
     Len,
     Input,
     Contains,
+    Type,
 }
 
 impl BuiltinKind {
@@ -43,6 +44,7 @@ impl BuiltinKind {
             "len" => Some(Len),
             "input" => Some(Input),
             "contains" => Some(Contains),
+            "type" => Some(Type),
             _ => None,
         }
     }
@@ -55,6 +57,10 @@ impl BuiltinKind {
     ) -> EvalResult {
         use BuiltinKind::*;
         match self {
+            Type => {
+                assert_param_len!(args, 1);
+                Ok(Arc::new(Object::Str(args[0].type_str().to_string())))
+            }
             Print => {
                 for obj in args {
                     println!("{obj}");

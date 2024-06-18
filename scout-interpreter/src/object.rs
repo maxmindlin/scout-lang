@@ -15,6 +15,22 @@ pub enum Object {
     Fn(Vec<Identifier>, Block),
 }
 
+impl Object {
+    pub fn type_str(&self) -> &str {
+        use Object::*;
+        match self {
+            Null => "null",
+            Map(_) => "map",
+            Str(_) => "string",
+            Node(_) => "node",
+            List(_) => "list",
+            Boolean(_) => "bool",
+            Number(_) => "number",
+            Fn(_, _) => "fn",
+        }
+    }
+}
+
 impl PartialEq for Object {
     fn eq(&self, other: &Self) -> bool {
         use Object::*;
