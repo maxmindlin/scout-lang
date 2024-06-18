@@ -409,6 +409,15 @@ fn eval_expression<'a>(
             }
             ExprKind::Boolean(val) => Ok(Arc::new(Object::Boolean(*val))),
             ExprKind::Null => Ok(Arc::new(Object::Null)),
+            ExprKind::List(vec) => {
+                let mut list_content = Vec::new();
+                for expr in vec {
+                    let obj = eval_expression(expr, crawler, env.clone(), results.clone()).await?;
+                    list_content.push(obj);
+                }
+
+                Ok(Arc::new(Object::List(list_content)))
+            }
         }
     }
     .boxed()

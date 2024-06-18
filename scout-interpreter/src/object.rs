@@ -48,8 +48,12 @@ impl Display for Object {
             Node(_) => write!(f, "Node"),
             List(objs) => {
                 write!(f, "[")?;
-                for obj in objs {
-                    write!(f, "{}, ", obj)?;
+                for (i, obj) in objs.iter().enumerate() {
+                    if i == objs.len() - 1 {
+                        write!(f, "{}", obj)?;
+                    } else {
+                        write!(f, "{}, ", obj)?;
+                    }
                 }
                 write!(f, "]")
             }

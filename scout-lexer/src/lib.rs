@@ -25,6 +25,8 @@ impl Lexer {
                 ')' => Token::new(RParen, c.to_string()),
                 '{' => Token::new(LBrace, c.to_string()),
                 '}' => Token::new(RBrace, c.to_string()),
+                '[' => Token::new(LBracket, c.to_string()),
+                ']' => Token::new(RBracket, c.to_string()),
                 ':' => Token::new(Colon, c.to_string()),
                 ',' => Token::new(Comma, c.to_string()),
                 '+' => Token::new(Plus, c.to_string()),

@@ -34,6 +34,7 @@ pub enum ExprKind {
     Number(f64),
     Boolean(bool),
     Ident(Identifier),
+    List(Vec<ExprKind>),
     Null,
     Select(String, Option<Identifier>),
     SelectAll(String, Option<Identifier>),

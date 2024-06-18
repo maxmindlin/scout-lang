@@ -210,6 +210,19 @@ impl Parser {
                     _ => Ok(ExprKind::Ident(Identifier::new(self.curr.literal.clone()))),
                 }
             }
+            TokenKind::LBracket => {
+                self.next_token();
+                let mut content = vec![];
+                while let Ok(expr) = self.parse_expr() {
+                    content.push(expr);
+                    self.next_token();
+                    if self.curr.kind == TokenKind::Comma {
+                        self.next_token();
+                    }
+                }
+
+                Ok(ExprKind::List(content))
+            }
             TokenKind::Select => match self.peek.kind {
                 TokenKind::Str => {
                     self.next_token();
@@ -470,6 +483,26 @@ mod tests {
                 ],
                 Block::default()
             )
+        )
+    )]
+    #[test_case(
+        r#"[1, "a"]"#,
+        StmtKind::Expr(
+            ExprKind::List(
+                vec![
+                    ExprKind::Number(1.0),
+                    ExprKind::Str("a".into()),
+                ]
+            )
+        )
+    )]
+    #[test_case(
+        r#"for a in [1, 2] do end"#,
+        StmtKind::ForLoop(
+            ForLoop::new(Identifier::new("a".into()), ExprKind::List(vec![
+                ExprKind::Number(1.0),
+                ExprKind::Number(2.0),
+            ]), Block::new(vec![]))
         )
     )]
     fn test_single_stmt(input: &str, exp: StmtKind) {
