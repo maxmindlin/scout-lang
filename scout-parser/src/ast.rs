@@ -26,6 +26,7 @@ pub enum StmtKind {
     Func(FuncDef),
     Return(Option<ExprKind>),
     Use(ExprKind),
+    TryCatch(Block, Option<Block>),
 }
 
 #[derive(Debug, PartialEq, Clone)]

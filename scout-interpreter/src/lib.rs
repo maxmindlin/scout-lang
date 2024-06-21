@@ -61,6 +61,7 @@ pub enum EvalError {
     UnknownIdent,
     UnknownPrefixOp,
     UnknownInfixOp,
+    UncaughtException,
     DuplicateDeclare,
     NonIterable,
     ScreenshotError,
@@ -116,6 +117,37 @@ fn eval_statement<'a>(
 
                 Ok(Arc::new(Object::Null))
             }
+            StmtKind::TryCatch(try_block, catch_block) => {
+                match eval_block(try_block, crawler, env.clone(), results.clone())
+                    .await
+                    .as_deref()
+                {
+                    Ok(Object::Return(ret)) => return Ok(ret.clone()),
+                    // if it was successful but not a return, do nothing
+                    Ok(_) => {}
+                    Err(_) if catch_block.is_some() => {
+                        let block = catch_block.as_ref().unwrap();
+                        if let Ok(Object::Return(ret)) =
+                            eval_block(block, crawler, env.clone(), results.clone())
+                                .await
+                                .as_deref()
+                        {
+                            return Ok(ret.clone());
+                        }
+                    }
+                    Err(_) => return Err(EvalError::UncaughtException),
+                };
+                // if eval_block(try_block, crawler, env.clone(), results.clone())
+                //     .await
+                //     .is_err()
+                // {
+                //     if let Some(block) = catch_block {
+                //         eval_block(block, crawler, env.clone(), results.clone()).await?;
+                //     }
+                // }
+
+                Ok(Arc::new(Object::Null))
+            }
             StmtKind::Scrape(defs) => {
                 let mut res = HashMap::new();
                 for (id, def) in &defs.pairs {
@@ -134,24 +166,25 @@ fn eval_statement<'a>(
             StmtKind::ForLoop(floop) => {
                 let items =
                     eval_expression(&floop.iterable, crawler, env.clone(), results.clone()).await?;
-                match &*items {
-                    Object::List(objs) => {
-                        for obj in objs {
-                            let mut scope = Env::default();
-                            scope.add_outer(env.clone()).await;
-                            scope.set(&floop.ident, obj.clone()).await;
-                            eval_block(
-                                &floop.block,
-                                crawler,
-                                Arc::new(Mutex::new(scope)),
-                                results.clone(),
-                            )
-                            .await?;
+                if let Some(iterable) = items.into_iterable() {
+                    for obj in iterable.into_iter().collect::<Vec<Arc<Object>>>() {
+                        let mut scope = Env::default();
+                        scope.add_outer(env.clone()).await;
+                        scope.set(&floop.ident, obj.clone()).await;
+                        if let Object::Return(ret) = &*eval_block(
+                            &floop.block,
+                            crawler,
+                            Arc::new(Mutex::new(scope)),
+                            results.clone(),
+                        )
+                        .await?
+                        {
+                            return Ok(ret.clone());
                         }
-
-                        Ok(Arc::new(Object::Null))
                     }
-                    _ => Err(EvalError::NonIterable),
+                    Ok(Arc::new(Object::Null))
+                } else {
+                    Err(EvalError::NonIterable)
                 }
             }
             StmtKind::Assign(ident, expr) => {
@@ -173,7 +206,11 @@ fn eval_statement<'a>(
                 let truth_check =
                     eval_expression(cond, crawler, env.clone(), results.clone()).await?;
                 if truth_check.is_truthy() {
-                    eval_block(block, crawler, env.clone(), results.clone()).await?;
+                    if let Object::Return(ret) =
+                        &*eval_block(block, crawler, env.clone(), results.clone()).await?
+                    {
+                        return Ok(ret.clone());
+                    }
                 }
 
                 Ok(Arc::new(Object::Null))
@@ -236,10 +273,10 @@ async fn eval_block(
         match stmt {
             StmtKind::Return(rv) => {
                 return match rv {
-                    None => Ok(Arc::new(Object::Null)),
-                    Some(expr) => {
-                        eval_expression(expr, crawler, env.clone(), results.clone()).await
-                    }
+                    None => Ok(Arc::new(Object::Return(Arc::new(Object::Null)))),
+                    Some(expr) => Ok(Arc::new(Object::Return(
+                        eval_expression(expr, crawler, env.clone(), results.clone()).await?,
+                    ))),
                 }
             }
             _ => {

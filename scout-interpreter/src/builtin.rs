@@ -29,6 +29,7 @@ pub enum BuiltinKind {
     Input,
     Contains,
     Type,
+    KeyPress,
 }
 
 impl BuiltinKind {
@@ -45,6 +46,7 @@ impl BuiltinKind {
             "input" => Some(Input),
             "contains" => Some(Contains),
             "type" => Some(Type),
+            "key_action" => Some(KeyPress),
             _ => None,
         }
     }
@@ -120,6 +122,19 @@ impl BuiltinKind {
                 }?;
 
                 Ok(Arc::new(Object::Number(len)))
+            }
+            KeyPress => {
+                assert_param_len!(args, 1);
+                if let Object::Str(code_str) = &*args[0] {
+                    let code = code_str.chars().next().ok_or(EvalError::InvalidFnParams)?;
+                    let actions = KeyActions::new("keypress".to_owned())
+                        .then(KeyAction::Down { value: code });
+
+                    crawler.perform_actions(actions).await?;
+                    Ok(Arc::new(Object::Null))
+                } else {
+                    Err(EvalError::InvalidFnParams)
+                }
             }
             Input => {
                 assert_param_len!(args, 2);

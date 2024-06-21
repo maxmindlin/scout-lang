@@ -13,6 +13,7 @@ pub enum Object {
     Boolean(bool),
     Number(f64),
     Fn(Vec<Identifier>, Block),
+    Return(Arc<Object>),
 }
 
 impl Object {
@@ -27,6 +28,23 @@ impl Object {
             Boolean(_) => "bool",
             Number(_) => "number",
             Fn(_, _) => "fn",
+            _ => "object",
+        }
+    }
+
+    pub fn into_iterable(&self) -> Option<impl IntoIterator<Item = Arc<Object>>> {
+        use Object::*;
+        match self {
+            List(v) => Some(v.clone()),
+            Str(s) => {
+                let new_vec: Vec<Arc<Object>> = s
+                    .chars()
+                    .map(|c| Arc::new(Object::Str(c.to_string())))
+                    .collect();
+
+                Some(new_vec)
+            }
+            _ => None,
         }
     }
 }
@@ -75,7 +93,7 @@ impl Display for Object {
             }
             Boolean(b) => write!(f, "{}", b),
             Number(n) => write!(f, "{}", n),
-            Fn(_, _) => write!(f, "Func"),
+            _ => write!(f, "object"),
         }
     }
 }
@@ -92,14 +110,14 @@ impl Object {
             Map(map) => Value::Object(obj_map_to_json(map)),
             Boolean(b) => Value::Bool(*b),
             Number(n) => json!(n),
-            Fn(_, _) => panic!("cant deserialize func"),
+            Fn(_, _) => panic!("cant serialize func"),
+            _ => panic!("cant serialize object"),
         }
     }
 
     pub fn is_truthy(&self) -> bool {
         use Object::*;
         match self {
-            Null => false,
             Str(s) => !s.is_empty(),
             Map(m) => !m.is_empty(),
             Node(_) => true,
@@ -108,6 +126,7 @@ impl Object {
             // @TODO: Idk what truthiness of floats should be
             Number(n) => *n > 0.0,
             Fn(_, _) => true,
+            _ => false,
         }
     }
 }

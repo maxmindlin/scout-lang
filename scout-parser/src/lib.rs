@@ -78,7 +78,7 @@ impl Parser {
                 self.expect_peek(TokenKind::Do)?;
                 self.next_token();
 
-                let block = self.parse_block()?;
+                let block = self.parse_block(vec![TokenKind::End])?;
 
                 Ok(StmtKind::Func(FuncDef::new(ident, args, block)))
             }
@@ -106,6 +106,7 @@ impl Parser {
                 }
             }
             TokenKind::Use => self.parse_use_stmt(),
+            TokenKind::Try => self.parse_try_catch(),
             _ => self.parse_expr_stmt(),
         }
     }
@@ -115,18 +116,34 @@ impl Parser {
         let cond = self.parse_expr()?;
         self.expect_peek(TokenKind::Do)?;
         self.next_token();
-        let block = self.parse_block()?;
+        let block = self.parse_block(vec![TokenKind::End])?;
         Ok(StmtKind::If(cond, block))
     }
 
-    fn parse_block(&mut self) -> ParseResult<Block> {
+    fn parse_block(&mut self, finalizers: Vec<TokenKind>) -> ParseResult<Block> {
         let mut stmts = Vec::new();
-        while self.curr.kind != TokenKind::End {
+        while !finalizers.contains(&self.curr.kind) {
             let stmt = self.parse_stmt()?;
             stmts.push(stmt);
             self.next_token();
         }
         Ok(Block::new(stmts))
+    }
+
+    fn parse_try_catch(&mut self) -> ParseResult<StmtKind> {
+        self.next_token();
+        let try_b = self.parse_block(vec![TokenKind::Catch, TokenKind::End])?;
+        let catch_b = if self.curr.kind == TokenKind::Catch {
+            self.next_token();
+            let block = self.parse_block(vec![TokenKind::End])?;
+            Some(block)
+        } else {
+            None
+        };
+        // self.next_token();
+        // let catch_b = self.parse_block(vec![TokenKind::End])?;
+
+        Ok(StmtKind::TryCatch(try_b, catch_b))
     }
 
     /// `for <ident> in <expr> do <block> end`
@@ -138,7 +155,7 @@ impl Parser {
         let iterable = self.parse_expr()?;
         self.expect_peek(TokenKind::Do)?;
         self.next_token();
-        let block = self.parse_block()?;
+        let block = self.parse_block(vec![TokenKind::End])?;
 
         self.next_token();
         let floop = ForLoop::new(ident, iterable, block);
@@ -505,6 +522,11 @@ mod tests {
             ]), Block::new(vec![]))
         )
     )]
+    #[test_case(
+        "try catch end",
+        StmtKind::TryCatch(Block::default(), Some(Block::default()))
+    )]
+    #[test_case("try end", StmtKind::TryCatch(Block::default(), None))]
     fn test_single_stmt(input: &str, exp: StmtKind) {
         let stmt = extract_first_stmt(input);
         assert_eq!(stmt, exp);

@@ -41,6 +41,9 @@ pub enum TokenKind {
     Null,
     Return,
     Use,
+    Try,
+    Catch,
+    Throw,
 }
 
 impl TokenKind {
@@ -61,6 +64,9 @@ impl TokenKind {
             "null" => Some(Null),
             "return" => Some(Return),
             "use" => Some(Use),
+            "try" => Some(Try),
+            "catch" => Some(Catch),
+            "throw" => Some(Throw),
             _ => None,
         }
     }

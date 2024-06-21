@@ -1,0 +1,77 @@
+ENTER = "\u{e006}"
+NULL = "\u{e000}"
+CANCEL = "\u{e001}"
+HELP = "\u{e002}"
+BACKSPACE = "\u{e003}"
+TAB = "\u{e004}"
+CLEAR = "\u{e005}"
+RETURN = "\u{e006}"
+ENTER = "\u{e007}"
+SHIFT = "\u{e008}"
+CONTROL = "\u{e009}"
+ALT = "\u{e00a}"
+PAUSE = "\u{e00b}"
+ESCAPE = "\u{e00c}"
+SPACE = "\u{e00d}"
+PAGEUP = "\u{e00e}"
+PAGEDOWN = "\u{e00f}"
+END = "\u{e010}"
+HOME = "\u{e011}"
+LEFT = "\u{e012}"
+UP = "\u{e013}"
+RIGHT = "\u{e014}"
+DOWN = "\u{e015}"
+INSERT = "\u{e016}"
+DELETE = "\u{e017}"
+SEMICOLON = "\u{e018}"
+EQUALS = "\u{e019}"
+NUMPAD0 = "\u{e01a}"
+NUMPAD1 = "\u{e01b}"
+NUMPAD2 = "\u{e01c}"
+NUMPAD3 = "\u{e01d}"
+NUMPAD4 = "\u{e01e}"
+NUMPAD5 = "\u{e01f}"
+NUMPAD6 = "\u{e020}"
+NUMPAD7 = "\u{e021}"
+NUMPAD8 = "\u{e022}"
+NUMPAD9 = "\u{e023}"
+MULTIPLY = "\u{e024}"
+ADD = "\u{e025}"
+SEPARATOR = "\u{e026}"
+SUBTRACT = "\u{e027}"
+DECIMAL = "\u{e028}"
+DIVIDE = "\u{e029}"
+F1 = "\u{e031}"
+F2 = "\u{e032}"
+F3 = "\u{e033}"
+F4 = "\u{e034}"
+F5 = "\u{e035}"
+F6 = "\u{e036}"
+F7 = "\u{e037}"
+F8 = "\u{e038}"
+F9 = "\u{e039}"
+F10 = "\u{e03a}"
+F11 = "\u{e03b}"
+F12 = "\u{e03c}"
+META = "\u{e03d}"
+COMMAND = "\u{e03d}"
+
+
+// links returns a list of nodes
+// that are anchor elements.
+//
+// Optionally provide a scope to limit
+// the search space.
+def links(scope) do
+  if scope do
+    return $$(scope)"a" |> href()
+  end
+
+  $$"a" |> href()
+end
+
+// Executes a key press action with
+// the given key unicode value.
+def press(code) do
+  key_action(code)
+end
