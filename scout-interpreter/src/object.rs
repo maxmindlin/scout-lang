@@ -118,15 +118,14 @@ impl Object {
     pub fn is_truthy(&self) -> bool {
         use Object::*;
         match self {
+            Null => false,
             Str(s) => !s.is_empty(),
             Map(m) => !m.is_empty(),
-            Node(_) => true,
             List(v) => !v.is_empty(),
             Boolean(b) => *b,
             // @TODO: Idk what truthiness of floats should be
             Number(n) => *n > 0.0,
-            Fn(_, _) => true,
-            _ => false,
+            _ => true,
         }
     }
 }

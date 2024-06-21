@@ -137,14 +137,6 @@ fn eval_statement<'a>(
                     }
                     Err(_) => return Err(EvalError::UncaughtException),
                 };
-                // if eval_block(try_block, crawler, env.clone(), results.clone())
-                //     .await
-                //     .is_err()
-                // {
-                //     if let Some(block) = catch_block {
-                //         eval_block(block, crawler, env.clone(), results.clone()).await?;
-                //     }
-                // }
 
                 Ok(Arc::new(Object::Null))
             }
