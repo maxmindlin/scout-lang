@@ -73,15 +73,7 @@ impl TokenKind {
 
     pub fn is_infix(&self) -> bool {
         use TokenKind::*;
-        match self {
-            EQ => true,
-            NEQ => true,
-            Plus => true,
-            Minus => true,
-            Asterisk => true,
-            Slash => true,
-            _ => false,
-        }
+        matches!(self, EQ | NEQ | Plus | Minus | Asterisk | Slash)
     }
 }
 
