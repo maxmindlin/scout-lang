@@ -1,9 +1,12 @@
 use std::collections::HashMap;
 
-use ast::{ExprKind, ForLoop, FuncDef, HashLiteral, Identifier, Program, StmtKind};
+use ast::{
+    ExprKind, ForLoop, FuncDef, HashLiteral, Identifier, IfElseLiteral, IfLiteral, Program,
+    StmtKind,
+};
 use scout_lexer::{Lexer, Token, TokenKind};
 
-use crate::ast::Block;
+use crate::ast::{Block, ElseLiteral};
 
 pub mod ast;
 
@@ -86,7 +89,7 @@ impl Parser {
             TokenKind::Scrape => self.parse_scrape_stmt(),
             TokenKind::For => self.parse_for_loop(),
             TokenKind::Screenshot => self.parse_screenshot_stmt(),
-            TokenKind::If => self.parse_if(),
+            TokenKind::If => self.parse_if_else(),
             TokenKind::Ident => match self.peek.kind {
                 TokenKind::Assign => {
                     let ident = Identifier::new(self.curr.literal.clone());
@@ -111,13 +114,33 @@ impl Parser {
         }
     }
 
-    fn parse_if(&mut self) -> ParseResult<StmtKind> {
+    fn parse_if_else(&mut self) -> ParseResult<StmtKind> {
+        let if_lit = self.parse_if()?;
+        let mut elifs = Vec::new();
+        while self.curr.kind == TokenKind::Elif {
+            elifs.push(self.parse_if()?)
+        }
+        let mut else_lit = None;
+        if self.curr.kind == TokenKind::Else {
+            self.next_token();
+            let block = self.parse_block(vec![TokenKind::End])?;
+            else_lit = Some(ElseLiteral { block })
+        }
+
+        Ok(StmtKind::IfElse(IfElseLiteral {
+            if_lit,
+            elifs,
+            else_lit,
+        }))
+    }
+
+    fn parse_if(&mut self) -> ParseResult<IfLiteral> {
         self.next_token();
         let cond = self.parse_expr()?;
         self.expect_peek(TokenKind::Do)?;
         self.next_token();
-        let block = self.parse_block(vec![TokenKind::End])?;
-        Ok(StmtKind::If(cond, block))
+        let block = self.parse_block(vec![TokenKind::End, TokenKind::Elif, TokenKind::Else])?;
+        Ok(IfLiteral { cond, block })
     }
 
     fn parse_block(&mut self, finalizers: Vec<TokenKind>) -> ParseResult<Block> {
@@ -475,10 +498,6 @@ mod tests {
         )
     )]
     #[test_case(
-        r#"if 1 do end"#,
-        StmtKind::If(ExprKind::Number(1.), Block::new(vec![]))
-    )]
-    #[test_case(
         r#"def f() do end"#,
         StmtKind::Func(
             FuncDef::new(
@@ -529,6 +548,26 @@ mod tests {
     #[test_case("try end", StmtKind::TryCatch(Block::default(), None))]
     fn test_single_stmt(input: &str, exp: StmtKind) {
         let stmt = extract_first_stmt(input);
+        assert_eq!(stmt, exp);
+    }
+
+    #[test]
+    fn test_if_else() {
+        let input = r#"if 1 do elif 2 do else end"#;
+        let stmt = extract_first_stmt(input);
+        let exp = StmtKind::IfElse(IfElseLiteral {
+            if_lit: IfLiteral {
+                cond: ExprKind::Number(1.),
+                block: Block::default(),
+            },
+            elifs: vec![IfLiteral {
+                cond: ExprKind::Number(2.),
+                block: Block::default(),
+            }],
+            else_lit: Some(ElseLiteral {
+                block: Block::default(),
+            }),
+        });
         assert_eq!(stmt, exp);
     }
 }

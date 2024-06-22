@@ -20,7 +20,7 @@ pub enum StmtKind {
     Scrape(HashLiteral),
     Expr(ExprKind),
     ForLoop(ForLoop),
-    If(ExprKind, Block),
+    IfElse(IfElseLiteral),
     Assign(Identifier, ExprKind),
     Screenshot(String),
     Func(FuncDef),
@@ -53,6 +53,24 @@ impl Identifier {
     pub fn new(name: String) -> Self {
         Self { name }
     }
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct IfElseLiteral {
+    pub if_lit: IfLiteral,
+    pub elifs: Vec<IfLiteral>,
+    pub else_lit: Option<ElseLiteral>,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct IfLiteral {
+    pub cond: ExprKind,
+    pub block: Block,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct ElseLiteral {
+    pub block: Block,
 }
 
 #[derive(Debug, PartialEq, Clone)]

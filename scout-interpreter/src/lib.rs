@@ -9,7 +9,7 @@ use futures::lock::Mutex;
 use futures::{future::BoxFuture, FutureExt};
 use object::{obj_map_to_json, Object};
 use scout_lexer::{Lexer, TokenKind};
-use scout_parser::ast::{Block, ExprKind, Identifier, NodeKind, Program, StmtKind};
+use scout_parser::ast::{Block, ExprKind, Identifier, IfElseLiteral, NodeKind, Program, StmtKind};
 use scout_parser::Parser;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
@@ -22,6 +22,18 @@ pub mod object;
 
 pub type EvalResult = Result<Arc<Object>, EvalError>;
 pub type ScrapeResultsPtr = Arc<Mutex<ScrapeResults>>;
+
+/// Evaluates the block and early returns if the stmt evaluates
+/// to a Return
+macro_rules! check_return_eval {
+    ($block:expr, $crawler:expr, $env:expr, $results:expr) => {
+        if let $crate::object::Object::Return(ret) =
+            &*eval_block($block, $crawler, $env, $results).await?
+        {
+            return Ok(ret.clone());
+        }
+    };
+}
 
 #[derive(Default, Serialize, Deserialize, Debug)]
 pub struct ScrapeResults {
@@ -127,13 +139,7 @@ fn eval_statement<'a>(
                     Ok(_) => {}
                     Err(_) if catch_block.is_some() => {
                         let block = catch_block.as_ref().unwrap();
-                        if let Ok(Object::Return(ret)) =
-                            eval_block(block, crawler, env.clone(), results.clone())
-                                .await
-                                .as_deref()
-                        {
-                            return Ok(ret.clone());
-                        }
+                        check_return_eval!(block, crawler, env.clone(), results.clone());
                     }
                     Err(_) => return Err(EvalError::UncaughtException),
                 };
@@ -163,16 +169,12 @@ fn eval_statement<'a>(
                         let mut scope = Env::default();
                         scope.add_outer(env.clone()).await;
                         scope.set(&floop.ident, obj.clone()).await;
-                        if let Object::Return(ret) = &*eval_block(
+                        check_return_eval!(
                             &floop.block,
                             crawler,
                             Arc::new(Mutex::new(scope)),
-                            results.clone(),
-                        )
-                        .await?
-                        {
-                            return Ok(ret.clone());
-                        }
+                            results.clone()
+                        );
                     }
                     Ok(Arc::new(Object::Null))
                 } else {
@@ -194,14 +196,28 @@ fn eval_statement<'a>(
 
                 Ok(Arc::new(Object::Null))
             }
-            StmtKind::If(cond, block) => {
+            StmtKind::IfElse(IfElseLiteral {
+                if_lit,
+                elifs,
+                else_lit,
+            }) => {
                 let truth_check =
-                    eval_expression(cond, crawler, env.clone(), results.clone()).await?;
+                    eval_expression(&if_lit.cond, crawler, env.clone(), results.clone()).await?;
                 if truth_check.is_truthy() {
-                    if let Object::Return(ret) =
-                        &*eval_block(block, crawler, env.clone(), results.clone()).await?
-                    {
-                        return Ok(ret.clone());
+                    check_return_eval!(&if_lit.block, crawler, env.clone(), results.clone());
+                } else {
+                    for elif in elifs {
+                        if eval_expression(&elif.cond, crawler, env.clone(), results.clone())
+                            .await?
+                            .is_truthy()
+                        {
+                            check_return_eval!(&elif.block, crawler, env.clone(), results.clone());
+                            return Ok(Arc::new(Object::Null));
+                        }
+                    }
+
+                    if let Some(lit) = else_lit {
+                        check_return_eval!(&lit.block, crawler, env.clone(), results.clone());
                     }
                 }
 
@@ -315,7 +331,13 @@ fn apply_call<'a>(
                         scope.set(id, obj.clone()).await;
                     }
 
-                    eval_block(block, crawler, Arc::new(Mutex::new(scope)), results.clone()).await
+                    let ev =
+                        eval_block(block, crawler, Arc::new(Mutex::new(scope)), results.clone())
+                            .await?;
+                    match &*ev {
+                        Object::Return(ret) => Ok(ret.clone()),
+                        _ => Ok(ev),
+                    }
                 }
                 _ => Err(EvalError::InvalidExpr),
             },

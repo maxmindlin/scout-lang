@@ -28,6 +28,8 @@ pub enum TokenKind {
 
     // Keywords
     If,
+    Elif,
+    Else,
     For,
     In,
     Do,
@@ -53,6 +55,8 @@ impl TokenKind {
             "for" => Some(For),
             "in" => Some(In),
             "if" => Some(If),
+            "elif" => Some(Elif),
+            "else" => Some(Else),
             "do" => Some(Do),
             "end" => Some(End),
             "goto" => Some(Goto),
