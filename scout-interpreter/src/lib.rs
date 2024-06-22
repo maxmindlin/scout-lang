@@ -224,7 +224,7 @@ fn eval_statement<'a>(
                 Ok(Arc::new(Object::Null))
             }
             StmtKind::Func(def) => {
-                let lit = Object::Fn(def.args.clone(), def.body.clone());
+                let lit = Object::Fn(def.params.clone(), def.body.clone());
                 env.lock().await.set(&def.ident, Arc::new(lit)).await;
                 Ok(Arc::new(Object::Null))
             }
@@ -315,20 +315,31 @@ fn apply_call<'a>(
             obj_params.insert(0, obj);
         }
 
+        // Set var before match to avoid deadlock on env
         let env_res = env.lock().await.get(ident).await;
         match env_res {
             Some(obj) => match &*obj {
-                Object::Fn(idents, block) => {
-                    if idents.len() != obj_params.len() {
-                        return Err(EvalError::InvalidUsage("Non-matching arg counts".into()));
-                    }
-
+                Object::Fn(fn_params, block) => {
                     let mut scope = Env::default();
                     scope.add_outer(env.clone()).await;
-                    for i in 0..idents.len() {
-                        let id = &idents[i];
-                        let obj = &obj_params[i];
-                        scope.set(id, obj.clone()).await;
+                    for (i, fn_param) in fn_params.iter().enumerate() {
+                        let id = &fn_param.ident;
+                        match obj_params.get(i) {
+                            Some(provided) => {
+                                scope.set(id, provided.clone()).await;
+                            }
+                            None => match &fn_param.default {
+                                Some(def) => {
+                                    let obj_def =
+                                        eval_expression(def, crawler, env.clone(), results.clone())
+                                            .await?;
+                                    scope.set(id, obj_def).await;
+                                }
+                                None => {
+                                    return Err(EvalError::InvalidFnParams);
+                                }
+                            },
+                        }
                     }
 
                     let ev =

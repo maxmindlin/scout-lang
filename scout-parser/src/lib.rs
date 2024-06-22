@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 use ast::{
-    ExprKind, ForLoop, FuncDef, HashLiteral, Identifier, IfElseLiteral, IfLiteral, Program,
-    StmtKind,
+    ExprKind, FnParam, ForLoop, FuncDef, HashLiteral, Identifier, IfElseLiteral, IfLiteral,
+    Program, StmtKind,
 };
 use scout_lexer::{Lexer, Token, TokenKind};
 
@@ -17,6 +17,7 @@ pub enum ParseError {
     UnexpectedToken(TokenKind, TokenKind),
     InvalidToken(TokenKind),
     InvalidNumber,
+    DefaultFnParamBefore,
 }
 
 pub struct Parser {
@@ -64,12 +65,26 @@ impl Parser {
                 self.expect_peek(TokenKind::LParen)?;
 
                 let mut args = Vec::new();
+                let mut has_defaults = false;
                 while self.peek.kind == TokenKind::Comma || self.peek.kind != TokenKind::RParen {
                     self.next_token();
                     match self.curr.kind {
                         TokenKind::Comma => {}
                         TokenKind::Ident => {
-                            args.push(Identifier::new(self.curr.literal.clone()));
+                            let ident = Identifier::new(self.curr.literal.clone());
+                            let mut default = None;
+                            if self.peek.kind == TokenKind::Assign {
+                                self.next_token();
+                                self.next_token();
+                                default = Some(self.parse_expr()?);
+                                has_defaults = true;
+                            } else if has_defaults {
+                                // Dont allow non-default params after default params.
+                                // If we dont disallow this then the interpreter will have a
+                                // hard time
+                                return Err(ParseError::DefaultFnParamBefore);
+                            }
+                            args.push(FnParam::new(ident, default));
                         }
                         _ => {
                             return Err(ParseError::InvalidToken(self.curr.kind));
@@ -470,6 +485,7 @@ mod tests {
             ExprKind::Str("a".into())
         )
     )]
+    #[test_case(r#"null"#, StmtKind::Expr(ExprKind::Null))]
     #[test_case(
         r#"for node in $$"a" do scrape {} end"#,
         StmtKind::ForLoop(
@@ -514,8 +530,20 @@ mod tests {
             FuncDef::new(
                 Identifier::new("f".into()),
                 vec![
-                    Identifier::new("a".into()),
-                    Identifier::new("b".into())
+                    FnParam::new(Identifier::new("a".into()), None),
+                    FnParam::new(Identifier::new("b".into()), None)
+                ],
+                Block::default()
+            )
+        )
+    )]
+    #[test_case(
+        r#"def f(a = null) do end"#,
+        StmtKind::Func(
+            FuncDef::new(
+                Identifier::new("f".into()),
+                vec![
+                    FnParam::new(Identifier::new("a".into()), Some(ExprKind::Null))
                 ],
                 Block::default()
             )

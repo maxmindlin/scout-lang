@@ -76,13 +76,29 @@ pub struct ElseLiteral {
 #[derive(Debug, PartialEq, Clone)]
 pub struct FuncDef {
     pub ident: Identifier,
-    pub args: Vec<Identifier>,
+    pub params: Vec<FnParam>,
     pub body: Block,
 }
 
 impl FuncDef {
-    pub fn new(ident: Identifier, args: Vec<Identifier>, body: Block) -> Self {
-        Self { ident, args, body }
+    pub fn new(ident: Identifier, params: Vec<FnParam>, body: Block) -> Self {
+        Self {
+            ident,
+            params,
+            body,
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct FnParam {
+    pub ident: Identifier,
+    pub default: Option<ExprKind>,
+}
+
+impl FnParam {
+    pub fn new(ident: Identifier, default: Option<ExprKind>) -> Self {
+        Self { ident, default }
     }
 }
 

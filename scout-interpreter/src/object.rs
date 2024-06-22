@@ -1,6 +1,6 @@
 use std::{collections::HashMap, fmt::Display, sync::Arc};
 
-use scout_parser::ast::{Block, Identifier};
+use scout_parser::ast::{Block, FnParam, Identifier};
 use serde_json::{json, Value};
 
 #[derive(Debug)]
@@ -12,7 +12,7 @@ pub enum Object {
     List(Vec<Arc<Object>>),
     Boolean(bool),
     Number(f64),
-    Fn(Vec<Identifier>, Block),
+    Fn(Vec<FnParam>, Block),
     Return(Arc<Object>),
 }
 
