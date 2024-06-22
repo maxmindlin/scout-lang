@@ -23,7 +23,7 @@ install-updater = false
 
 [package]
 name = "scout"
-version = "0.4.0"
+version = "0.4.1"
 edition = "2021"
 repository = "https://github.com/maxmindlin/scout-lang"
 
