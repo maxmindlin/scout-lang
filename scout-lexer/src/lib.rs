@@ -32,6 +32,8 @@ impl Lexer {
                 '+' => Token::new(Plus, c.to_string()),
                 '-' => Token::new(Minus, c.to_string()),
                 '*' => Token::new(Asterisk, c.to_string()),
+                '<' => Token::new(LT, c.to_string()),
+                '>' => Token::new(GT, c.to_string()),
                 '=' => match self.peek() {
                     Some('=') => {
                         self.next();
@@ -44,7 +46,7 @@ impl Lexer {
                         self.next();
                         Token::new(NEQ, "!=".to_string())
                     }
-                    _ => Token::new(Illegal, '!'.to_string()),
+                    _ => Token::new(Bang, '!'.to_string()),
                 },
                 '"' => {
                     let literal = self.read_string();

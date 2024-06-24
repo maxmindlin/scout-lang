@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::fs;
 use std::thread::sleep;
 use std::time::Duration;
@@ -9,7 +10,9 @@ use futures::lock::Mutex;
 use futures::{future::BoxFuture, FutureExt};
 use object::{obj_map_to_json, Object};
 use scout_lexer::{Lexer, TokenKind};
-use scout_parser::ast::{Block, ExprKind, Identifier, IfElseLiteral, NodeKind, Program, StmtKind};
+use scout_parser::ast::{
+    Block, CrawlLiteral, ExprKind, Identifier, IfElseLiteral, NodeKind, Program, StmtKind,
+};
 use scout_parser::Parser;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
@@ -22,6 +25,8 @@ pub mod object;
 
 pub type EvalResult = Result<Arc<Object>, EvalError>;
 pub type ScrapeResultsPtr = Arc<Mutex<ScrapeResults>>;
+
+const MAX_DEPTH: usize = 2;
 
 /// Evaluates the block and early returns if the stmt evaluates
 /// to a Return
@@ -61,7 +66,7 @@ impl ScrapeResults {
 }
 
 // TODO add parameters for better debugging.
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug)]
 pub enum EvalError {
     TypeMismatch,
     InvalidUsage(String),
@@ -69,15 +74,17 @@ pub enum EvalError {
     InvalidExpr,
     InvalidUrl,
     InvalidImport,
+    InvalidIndex,
     NonFunction,
     UnknownIdent,
     UnknownPrefixOp,
     UnknownInfixOp,
     UncaughtException,
+    URLParseError(String),
     DuplicateDeclare,
     NonIterable,
     ScreenshotError,
-    BrowserError,
+    BrowserError(fantoccini::error::CmdError),
     OSError,
 }
 
@@ -124,8 +131,7 @@ fn eval_statement<'a>(
                     return Err(EvalError::InvalidFnParams);
                 }
 
-                // @TODO: Need a better way to determine that a page is "done"
-                sleep(Duration::from_secs(1));
+                wait_for_goto_ready().await;
 
                 Ok(Arc::new(Object::Null))
             }
@@ -265,9 +271,98 @@ fn eval_statement<'a>(
                     _ => Err(EvalError::InvalidImport),
                 }
             }
+            StmtKind::Crawl(lit) => {
+                let mut visited = HashSet::new();
+
+                eval_crawl(lit, crawler, env, results, &mut visited, 1).await?;
+
+                Ok(Arc::new(Object::Null))
+            }
         }
     }
     .boxed()
+}
+
+fn eval_crawl<'a>(
+    lit: &'a CrawlLiteral,
+    crawler: &'a fantoccini::Client,
+    env: EnvPointer,
+    results: ScrapeResultsPtr,
+    visited: &'a mut HashSet<String>,
+    depth: usize,
+) -> BoxFuture<'a, Result<(), EvalError>> {
+    async move {
+        let start = crawler.window().await?;
+        match crawler.find_all(Locator::Css("a[href]")).await {
+            Ok(elems) => {
+                for elem in elems.iter() {
+                    if let Ok(Some(link_str)) = elem.attr("href").await {
+                        let curr_url = crawler.current_url().await?;
+                        let link = match url::Url::parse(&link_str) {
+                            Ok(l) => Ok(l.to_string()),
+                            Err(url::ParseError::RelativeUrlWithoutBase) => Ok(curr_url
+                                .join(&link_str)
+                                .map_err(|_| EvalError::InvalidUrl)?
+                                .to_string()),
+                            Err(_) => Err(EvalError::InvalidUrl),
+                        }?;
+
+                        let mut scope = Env::default();
+                        scope.add_outer(env.clone()).await;
+
+                        if let Some(bind) = &lit.binding {
+                            scope.set(bind, Arc::new(Object::Str(link.clone()))).await;
+                        }
+
+                        let new_env = Arc::new(Mutex::new(scope));
+
+                        let mut truth_check = true;
+                        if let Some(expr) = &lit.filter {
+                            let obj =
+                                eval_expression(expr, crawler, new_env.clone(), results.clone())
+                                    .await?;
+                            truth_check = obj.is_truthy();
+                        }
+                        if !visited.contains(&link) && truth_check {
+                            let new_tab = crawler.new_window(true).await?;
+                            crawler.switch_to_window(new_tab.handle).await?;
+                            let _ = crawler.goto(&link).await;
+
+                            // Add both the starting url and resolved url to the visited.
+                            visited.insert(link);
+                            visited.insert(crawler.current_url().await?.to_string());
+
+                            eval_block(&lit.body, crawler, new_env.clone(), results.clone())
+                                .await?;
+
+                            if depth < MAX_DEPTH {
+                                eval_crawl(
+                                    lit,
+                                    crawler,
+                                    env.clone(),
+                                    results.clone(),
+                                    visited,
+                                    depth + 1,
+                                )
+                                .await?;
+                            }
+
+                            crawler.switch_to_window(start.clone()).await?;
+                        }
+                    }
+                }
+            }
+            Err(e) => return Err(EvalError::BrowserError(e)),
+        };
+
+        Ok(())
+    }
+    .boxed()
+}
+
+async fn wait_for_goto_ready() {
+    // @TODO: Need a better way to determine that a page is "done"
+    sleep(Duration::from_secs(1));
 }
 
 async fn eval_block(
@@ -306,11 +401,15 @@ fn apply_call<'a>(
     results: ScrapeResultsPtr,
 ) -> BoxFuture<'a, EvalResult> {
     async move {
+        // Evaluate the provided fn inputs
         let mut obj_params = Vec::new();
         for param in params.iter() {
             let expr = eval_expression(param, crawler, env.clone(), results.clone()).await?;
             obj_params.push(expr);
         }
+
+        // Insert into the beginning of fn inputs if the
+        // fn is being piped
         if let Some(obj) = prev {
             obj_params.insert(0, obj);
         }
@@ -318,16 +417,23 @@ fn apply_call<'a>(
         // Set var before match to avoid deadlock on env
         let env_res = env.lock().await.get(ident).await;
         match env_res {
+            // This is a user defined function
             Some(obj) => match &*obj {
+                // Only fn's are callable
                 Object::Fn(fn_params, block) => {
+                    // Create the scope that will be used within the fn body
                     let mut scope = Env::default();
                     scope.add_outer(env.clone()).await;
                     for (i, fn_param) in fn_params.iter().enumerate() {
                         let id = &fn_param.ident;
+                        // check if the fn was provided this param or if
+                        // we should use a default
                         match obj_params.get(i) {
+                            // Fn param was provided
                             Some(provided) => {
                                 scope.set(id, provided.clone()).await;
                             }
+                            // Fn param was not provided, check for defaults
                             None => match &fn_param.default {
                                 Some(def) => {
                                     let obj_def =
@@ -352,6 +458,7 @@ fn apply_call<'a>(
                 }
                 _ => Err(EvalError::InvalidExpr),
             },
+            // Not user defined, check if its a builtin
             None => match BuiltinKind::is_from(&ident.name) {
                 Some(builtin) => builtin.apply(crawler, results.clone(), obj_params).await,
                 None => Err(EvalError::UnknownIdent),
@@ -480,6 +587,11 @@ fn eval_expression<'a>(
 
                 Ok(Arc::new(Object::List(list_content)))
             }
+            ExprKind::Prefix(rhs, op) => {
+                let r_obj = eval_expression(rhs, crawler, env.clone(), results.clone()).await?;
+                let res = eval_prefix(r_obj, op)?;
+                Ok(res)
+            }
         }
     }
     .boxed()
@@ -493,7 +605,25 @@ fn eval_op(lhs: Arc<Object>, op: &TokenKind, rhs: Arc<Object>) -> EvalResult {
         TokenKind::Minus => eval_minus_op(lhs, rhs),
         TokenKind::Asterisk => eval_asterisk_op(lhs, rhs),
         TokenKind::Slash => eval_slash_op(lhs, rhs),
+        TokenKind::LBracket => eval_index(lhs, rhs),
         _ => Err(EvalError::UnknownInfixOp),
+    }
+}
+
+fn eval_prefix(rhs: Arc<Object>, op: &TokenKind) -> EvalResult {
+    match (&*rhs, op) {
+        (_, TokenKind::Bang) => {
+            let truth = !rhs.is_truthy();
+            Ok(Arc::new(Object::Boolean(truth)))
+        }
+        _ => Err(EvalError::UnknownPrefixOp),
+    }
+}
+
+fn eval_index(lhs: Arc<Object>, idx: Arc<Object>) -> EvalResult {
+    match (&*lhs, &*idx) {
+        (Object::List(a), Object::Number(b)) => Ok(a[*b as usize].clone()),
+        _ => Err(EvalError::InvalidIndex),
     }
 }
 
@@ -530,8 +660,8 @@ fn eval_slash_op(lhs: Arc<Object>, rhs: Arc<Object>) -> EvalResult {
 }
 
 impl From<fantoccini::error::CmdError> for EvalError {
-    fn from(_: fantoccini::error::CmdError) -> Self {
-        Self::BrowserError
+    fn from(e: fantoccini::error::CmdError) -> Self {
+        Self::BrowserError(e)
     }
 }
 

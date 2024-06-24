@@ -16,32 +16,56 @@ pub struct Program {
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum StmtKind {
-    Goto(ExprKind),
-    Scrape(HashLiteral),
+    Assign(Identifier, ExprKind),
+    Crawl(CrawlLiteral),
     Expr(ExprKind),
     ForLoop(ForLoop),
-    IfElse(IfElseLiteral),
-    Assign(Identifier, ExprKind),
-    Screenshot(String),
     Func(FuncDef),
+    Goto(ExprKind),
+    IfElse(IfElseLiteral),
     Return(Option<ExprKind>),
-    Use(ExprKind),
+    Scrape(HashLiteral),
+    Screenshot(String),
     TryCatch(Block, Option<Block>),
+    Use(ExprKind),
 }
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum ExprKind {
+    // Literals
     Str(String),
     Number(f64),
     Boolean(bool),
     Ident(Identifier),
     List(Vec<ExprKind>),
     Null,
+
+    // Selects
     Select(String, Option<Identifier>),
     SelectAll(String, Option<Identifier>),
+
+    // Rest
     Call(Identifier, Vec<ExprKind>),
     Chain(Vec<ExprKind>),
     Infix(Box<ExprKind>, TokenKind, Box<ExprKind>),
+    Prefix(Box<ExprKind>, TokenKind),
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct CrawlLiteral {
+    pub binding: Option<Identifier>,
+    pub filter: Option<ExprKind>,
+    pub body: Block,
+}
+
+impl CrawlLiteral {
+    pub fn new(binding: Option<Identifier>, filter: Option<ExprKind>, body: Block) -> Self {
+        Self {
+            binding,
+            filter,
+            body,
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]

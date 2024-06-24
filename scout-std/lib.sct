@@ -62,12 +62,12 @@ COMMAND = "\u{e03d}"
 //
 // Optionally provide a scope to limit
 // the search space.
-def links(scope) do
+def links(scope = null) do
   if scope do
-    return $$(scope)"a" |> href()
+    return $$(scope)"a[href]" |> href()
   end
 
-  $$"a" |> href()
+  $$"a[href]" |> href()
 end
 
 // Executes a key press action with

@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 use ast::{
-    ExprKind, FnParam, ForLoop, FuncDef, HashLiteral, Identifier, IfElseLiteral, IfLiteral,
-    Program, StmtKind,
+    CrawlLiteral, ExprKind, FnParam, ForLoop, FuncDef, HashLiteral, Identifier, IfElseLiteral,
+    IfLiteral, Program, StmtKind,
 };
 use scout_lexer::{Lexer, Token, TokenKind};
 
@@ -125,8 +125,29 @@ impl Parser {
             }
             TokenKind::Use => self.parse_use_stmt(),
             TokenKind::Try => self.parse_try_catch(),
+            TokenKind::Crawl => self.parse_crawl(),
             _ => self.parse_expr_stmt(),
         }
+    }
+
+    fn parse_crawl(&mut self) -> ParseResult<StmtKind> {
+        let mut binding = None;
+        if self.peek.kind == TokenKind::Ident {
+            self.next_token();
+            binding = Some(Identifier::new(self.curr.literal.clone()));
+        }
+
+        let mut filter = None;
+        if self.peek.kind == TokenKind::Where {
+            self.next_token();
+            self.next_token();
+            let expr = self.parse_expr()?;
+            filter = Some(expr);
+        }
+        self.expect_peek(TokenKind::Do)?;
+        self.next_token();
+        let block = self.parse_block(vec![TokenKind::End])?;
+        Ok(StmtKind::Crawl(CrawlLiteral::new(binding, filter, block)))
     }
 
     fn parse_if_else(&mut self) -> ParseResult<StmtKind> {
@@ -326,18 +347,36 @@ impl Parser {
                     .map_err(|_| ParseError::InvalidNumber)?,
             )),
             TokenKind::Null => Ok(ExprKind::Null),
+            t if t.is_prefix() => {
+                self.next_token();
+                let rhs = self.parse_expr()?;
+                Ok(ExprKind::Prefix(Box::new(rhs), t))
+            }
             _ => Err(ParseError::InvalidToken(self.curr.kind)),
         }?;
 
         if self.peek.kind.is_infix() {
-            self.next_token();
-            let op = self.curr.kind;
-            self.next_token();
-            let rhs = self.parse_expr()?;
-            Ok(ExprKind::Infix(Box::new(lhs), op, Box::new(rhs)))
+            self.parse_infix(lhs)
+            // self.next_token();
+            // let op = self.curr.kind;
+            // self.next_token();
+            // let rhs = self.parse_expr()?;
+            // Ok(ExprKind::Infix(Box::new(lhs), op, Box::new(rhs)))
+        } else if self.peek.kind == TokenKind::LBracket {
+            let infix = self.parse_infix(lhs);
+            self.expect_peek(TokenKind::RBracket)?;
+            infix
         } else {
             Ok(lhs)
         }
+    }
+
+    fn parse_infix(&mut self, lhs: ExprKind) -> ParseResult<ExprKind> {
+        self.next_token();
+        let op = self.curr.kind;
+        self.next_token();
+        let rhs = self.parse_expr()?;
+        Ok(ExprKind::Infix(Box::new(lhs), op, Box::new(rhs)))
     }
 
     fn parse_expr(&mut self) -> ParseResult<ExprKind> {
@@ -574,6 +613,30 @@ mod tests {
         StmtKind::TryCatch(Block::default(), Some(Block::default()))
     )]
     #[test_case("try end", StmtKind::TryCatch(Block::default(), None))]
+    #[test_case(
+        "a[0]",
+        StmtKind::Expr(
+            ExprKind::Infix(
+                Box::new(ExprKind::Ident(Identifier::new("a".into()))),
+                TokenKind::LBracket,
+                Box::new(ExprKind::Number(0.))
+            )
+        )
+    )]
+    #[test_case(
+        "crawl do end",
+        StmtKind::Crawl(CrawlLiteral::new(None, None, Block::default()))
+    )]
+    #[test_case(
+        "crawl link where true do end",
+        StmtKind::Crawl(
+            CrawlLiteral::new(
+                Some(Identifier::new("link".into())),
+                Some(ExprKind::Boolean(true)),
+                Block::default()
+            )
+        )
+    )]
     fn test_single_stmt(input: &str, exp: StmtKind) {
         let stmt = extract_first_stmt(input);
         assert_eq!(stmt, exp);

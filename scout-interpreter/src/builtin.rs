@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{env, sync::Arc};
 
 use fantoccini::{
     actions::{InputSource, KeyAction, KeyActions},
@@ -19,6 +19,7 @@ macro_rules! assert_param_len {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum BuiltinKind {
+    Args,
     Print,
     TextContent,
     Href,
@@ -30,12 +31,17 @@ pub enum BuiltinKind {
     Contains,
     Type,
     KeyPress,
+    Number,
+    Url,
 }
 
 impl BuiltinKind {
     pub fn is_from(s: &str) -> Option<Self> {
         use BuiltinKind::*;
         match s {
+            "url" => Some(Url),
+            "number" => Some(Number),
+            "args" => Some(Args),
             "print" => Some(Print),
             "textContent" => Some(TextContent),
             "trim" => Some(Trim),
@@ -59,6 +65,34 @@ impl BuiltinKind {
     ) -> EvalResult {
         use BuiltinKind::*;
         match self {
+            Url => {
+                let url = crawler.current_url().await?;
+                Ok(Arc::new(Object::Str(url.to_string())))
+            }
+            Number => {
+                assert_param_len!(args, 1);
+                if let Object::Str(s) = &*args[0] {
+                    match s.parse::<f64>() {
+                        Ok(n) => Ok(Arc::new(Object::Number(n))),
+                        Err(_) => Err(EvalError::InvalidUsage(
+                            "input to number() must be a valid number".into(),
+                        )),
+                    }
+                } else {
+                    Err(EvalError::InvalidUsage(
+                        "number() takes a str as input".to_owned(),
+                    ))
+                }
+            }
+            Args => {
+                let env_args = env::args().collect::<Vec<String>>();
+                let mut out = Vec::new();
+                // start at 2 because idx 0 is the executable location & idx 1 is the filename
+                for idx in 2..env_args.len() {
+                    out.push(Arc::new(Object::Str(env_args[idx].clone())));
+                }
+                Ok(Arc::new(Object::List(out)))
+            }
             Type => {
                 assert_param_len!(args, 1);
                 Ok(Arc::new(Object::Str(args[0].type_str().to_string())))
@@ -140,9 +174,7 @@ impl BuiltinKind {
                 assert_param_len!(args, 2);
                 match (&*args[0], &*args[1]) {
                     (Object::Node(elem), Object::Str(s)) => {
-                        elem.send_keys(s)
-                            .map_err(|_| EvalError::BrowserError)
-                            .await?;
+                        elem.send_keys(s).map_err(EvalError::BrowserError).await?;
 
                         if args.len() > 2 && args[2].is_truthy() {
                             let actions =

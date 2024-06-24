@@ -25,6 +25,9 @@ pub enum TokenKind {
     Minus,
     Asterisk,
     Slash,
+    GT,
+    LT,
+    Bang,
 
     // Keywords
     If,
@@ -46,12 +49,15 @@ pub enum TokenKind {
     Try,
     Catch,
     Throw,
+    Crawl,
+    Where,
 }
 
 impl TokenKind {
     pub fn is_to_keyword(literal: &str) -> Option<Self> {
         use TokenKind::*;
         match literal {
+            "where" => Some(Where),
             "for" => Some(For),
             "in" => Some(In),
             "if" => Some(If),
@@ -70,6 +76,7 @@ impl TokenKind {
             "use" => Some(Use),
             "try" => Some(Try),
             "catch" => Some(Catch),
+            "crawl" => Some(Crawl),
             "throw" => Some(Throw),
             _ => None,
         }
@@ -77,7 +84,12 @@ impl TokenKind {
 
     pub fn is_infix(&self) -> bool {
         use TokenKind::*;
-        matches!(self, EQ | NEQ | Plus | Minus | Asterisk | Slash)
+        matches!(self, EQ | NEQ | Plus | Minus | Asterisk | Slash | GT | LT)
+    }
+
+    pub fn is_prefix(&self) -> bool {
+        use TokenKind::*;
+        matches!(self, Bang)
     }
 }
 

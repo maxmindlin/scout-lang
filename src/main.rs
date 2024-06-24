@@ -1,26 +1,28 @@
-use std::{fs, process::Command, sync::Arc};
+use std::{env, fs, process::Command, sync::Arc};
 
-use clap::Parser as CLIParser;
 use futures::lock::Mutex;
 use repl::run_repl;
 use scout_interpreter::{env::Env, eval, ScrapeResultsPtr};
 use scout_lexer::Lexer;
 use scout_parser::{ast::NodeKind, Parser};
+use serde::Deserialize;
 
 mod repl;
 
-#[derive(CLIParser, Debug)]
-struct Args {
-    file: Option<String>,
+#[derive(Deserialize, Debug)]
+struct EnvVars {
+    #[serde(default)]
+    scout_debug: bool,
 
-    #[arg(long)]
-    debug: bool,
+    #[serde(default = "default_port")]
+    scout_port: usize,
 
-    #[arg(short, long, default_value_t = 4444)]
-    port: usize,
+    #[serde(default)]
+    scout_proxy: Option<String>,
+}
 
-    #[arg(long)]
-    proxy: Option<String>,
+fn default_port() -> usize {
+    4444
 }
 
 async fn run(
@@ -53,11 +55,12 @@ async fn run(
 
 #[tokio::main]
 async fn main() {
-    let args = Args::parse();
+    let env_vars = envy::from_env::<EnvVars>().expect("error loading env config");
+    let args: Vec<String> = env::args().collect();
 
     let child = Command::new("geckodriver")
         .arg("--port")
-        .arg(args.port.to_string())
+        .arg(env_vars.scout_port.to_string())
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .spawn()
@@ -67,18 +70,18 @@ async fn main() {
     std::thread::sleep(std::time::Duration::from_millis(50));
 
     let mut caps = serde_json::map::Map::new();
-    if !args.debug {
+    if !env_vars.scout_debug {
         let opts = serde_json::json!({ "args": ["--headless"] });
         caps.insert("moz:firefoxOptions".into(), opts);
     }
-    if let Some(proxy) = args.proxy {
+    if let Some(proxy) = env_vars.scout_proxy {
         let opt = serde_json::json!({
             "proxyType": "manual",
             "httpProxy": proxy,
         });
         caps.insert("proxy".into(), opt);
     }
-    let conn_url = format!("http://localhost:{}", args.port);
+    let conn_url = format!("http://localhost:{}", env_vars.scout_port);
     let crawler = fantoccini::ClientBuilder::native()
         .capabilities(caps)
         .connect(&conn_url)
@@ -86,7 +89,7 @@ async fn main() {
         .expect("error starting browser");
 
     let results = ScrapeResultsPtr::default();
-    if let Err(e) = run(args.file, &crawler, results.clone()).await {
+    if let Err(e) = run(args.get(1).cloned(), &crawler, results.clone()).await {
         println!("Error: {}", e);
     }
     let json_results = results.lock().await.to_json();
