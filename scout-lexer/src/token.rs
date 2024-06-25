@@ -27,6 +27,8 @@ pub enum TokenKind {
     Slash,
     GT,
     LT,
+    GTE,
+    LTE,
     Bang,
 
     // Keywords
@@ -51,6 +53,8 @@ pub enum TokenKind {
     Throw,
     Crawl,
     Where,
+    And,
+    Or,
 }
 
 impl TokenKind {
@@ -78,13 +82,18 @@ impl TokenKind {
             "catch" => Some(Catch),
             "crawl" => Some(Crawl),
             "throw" => Some(Throw),
+            "and" => Some(And),
+            "or" => Some(Or),
             _ => None,
         }
     }
 
     pub fn is_infix(&self) -> bool {
         use TokenKind::*;
-        matches!(self, EQ | NEQ | Plus | Minus | Asterisk | Slash | GT | LT)
+        matches!(
+            self,
+            EQ | NEQ | Plus | Minus | Asterisk | Slash | GT | LT | And | Or
+        )
     }
 
     pub fn is_prefix(&self) -> bool {

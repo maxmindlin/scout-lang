@@ -53,15 +53,21 @@ pub enum ExprKind {
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct CrawlLiteral {
-    pub binding: Option<Identifier>,
+    pub bindings: Option<CrawlBindings>,
     pub filter: Option<ExprKind>,
     pub body: Block,
 }
 
+#[derive(Debug, PartialEq, Clone)]
+pub struct CrawlBindings {
+    pub link: Identifier,
+    pub depth: Identifier,
+}
+
 impl CrawlLiteral {
-    pub fn new(binding: Option<Identifier>, filter: Option<ExprKind>, body: Block) -> Self {
+    pub fn new(bindings: Option<CrawlBindings>, filter: Option<ExprKind>, body: Block) -> Self {
         Self {
-            binding,
+            bindings,
             filter,
             body,
         }

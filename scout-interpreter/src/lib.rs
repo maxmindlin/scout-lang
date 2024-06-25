@@ -26,7 +26,7 @@ pub mod object;
 pub type EvalResult = Result<Arc<Object>, EvalError>;
 pub type ScrapeResultsPtr = Arc<Mutex<ScrapeResults>>;
 
-const MAX_DEPTH: usize = 2;
+const MAX_DEPTH: usize = 10;
 
 /// Evaluates the block and early returns if the stmt evaluates
 /// to a Return
@@ -310,8 +310,13 @@ fn eval_crawl<'a>(
                         let mut scope = Env::default();
                         scope.add_outer(env.clone()).await;
 
-                        if let Some(bind) = &lit.binding {
-                            scope.set(bind, Arc::new(Object::Str(link.clone()))).await;
+                        if let Some(bindings) = &lit.bindings {
+                            scope
+                                .set(&bindings.link, Arc::new(Object::Str(link.clone())))
+                                .await;
+                            scope
+                                .set(&bindings.depth, Arc::new(Object::Number(depth as f64)))
+                                .await;
                         }
 
                         let new_env = Arc::new(Mutex::new(scope));
@@ -570,7 +575,6 @@ fn eval_expression<'a>(
                 Ok(prev.unwrap())
             }
             ExprKind::Infix(lhs, op, rhs) => {
-                // TODO: precedence....
                 let l_obj = eval_expression(lhs, crawler, env.clone(), results.clone()).await?;
                 let r_obj = eval_expression(rhs, crawler, env.clone(), results.clone()).await?;
                 let res = eval_op(l_obj.clone(), op, r_obj.clone())?;
@@ -606,6 +610,16 @@ fn eval_op(lhs: Arc<Object>, op: &TokenKind, rhs: Arc<Object>) -> EvalResult {
         TokenKind::Asterisk => eval_asterisk_op(lhs, rhs),
         TokenKind::Slash => eval_slash_op(lhs, rhs),
         TokenKind::LBracket => eval_index(lhs, rhs),
+        TokenKind::GT => eval_gt_op(lhs, rhs),
+        TokenKind::LT => eval_lt_op(lhs, rhs),
+        TokenKind::GTE => eval_gte_op(lhs, rhs),
+        TokenKind::LTE => eval_lte_op(lhs, rhs),
+        TokenKind::And => Ok(Arc::new(Object::Boolean(
+            lhs.is_truthy() && rhs.is_truthy(),
+        ))),
+        TokenKind::Or => Ok(Arc::new(Object::Boolean(
+            lhs.is_truthy() || rhs.is_truthy(),
+        ))),
         _ => Err(EvalError::UnknownInfixOp),
     }
 }
@@ -624,6 +638,34 @@ fn eval_index(lhs: Arc<Object>, idx: Arc<Object>) -> EvalResult {
     match (&*lhs, &*idx) {
         (Object::List(a), Object::Number(b)) => Ok(a[*b as usize].clone()),
         _ => Err(EvalError::InvalidIndex),
+    }
+}
+
+fn eval_gt_op(lhs: Arc<Object>, rhs: Arc<Object>) -> EvalResult {
+    match (&*lhs, &*rhs) {
+        (Object::Number(a), Object::Number(b)) => Ok(Arc::new(Object::Boolean(a > b))),
+        _ => Err(EvalError::UnknownInfixOp),
+    }
+}
+
+fn eval_gte_op(lhs: Arc<Object>, rhs: Arc<Object>) -> EvalResult {
+    match (&*lhs, &*rhs) {
+        (Object::Number(a), Object::Number(b)) => Ok(Arc::new(Object::Boolean(a >= b))),
+        _ => Err(EvalError::UnknownInfixOp),
+    }
+}
+
+fn eval_lt_op(lhs: Arc<Object>, rhs: Arc<Object>) -> EvalResult {
+    match (&*lhs, &*rhs) {
+        (Object::Number(a), Object::Number(b)) => Ok(Arc::new(Object::Boolean(a < b))),
+        _ => Err(EvalError::UnknownInfixOp),
+    }
+}
+
+fn eval_lte_op(lhs: Arc<Object>, rhs: Arc<Object>) -> EvalResult {
+    match (&*lhs, &*rhs) {
+        (Object::Number(a), Object::Number(b)) => Ok(Arc::new(Object::Boolean(a <= b))),
+        _ => Err(EvalError::UnknownInfixOp),
     }
 }
 

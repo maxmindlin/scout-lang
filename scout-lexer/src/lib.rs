@@ -32,8 +32,20 @@ impl Lexer {
                 '+' => Token::new(Plus, c.to_string()),
                 '-' => Token::new(Minus, c.to_string()),
                 '*' => Token::new(Asterisk, c.to_string()),
-                '<' => Token::new(LT, c.to_string()),
-                '>' => Token::new(GT, c.to_string()),
+                '<' => match self.peek() {
+                    Some('=') => {
+                        self.next();
+                        Token::new(LTE, "<=".to_string())
+                    }
+                    _ => Token::new(LT, '<'.to_string()),
+                },
+                '>' => match self.peek() {
+                    Some('=') => {
+                        self.next();
+                        Token::new(GTE, "<=".to_string())
+                    }
+                    _ => Token::new(GT, '>'.to_string()),
+                },
                 '=' => match self.peek() {
                     Some('=') => {
                         self.next();

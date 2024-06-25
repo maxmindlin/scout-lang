@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 use ast::{
-    CrawlLiteral, ExprKind, FnParam, ForLoop, FuncDef, HashLiteral, Identifier, IfElseLiteral,
-    IfLiteral, Program, StmtKind,
+    CrawlBindings, CrawlLiteral, ExprKind, FnParam, ForLoop, FuncDef, HashLiteral, Identifier,
+    IfElseLiteral, IfLiteral, Program, StmtKind,
 };
 use scout_lexer::{Lexer, Token, TokenKind};
 
@@ -11,13 +11,89 @@ use crate::ast::{Block, ElseLiteral};
 pub mod ast;
 
 type ParseResult<T> = Result<T, ParseError>;
+type PrefixParseFn = fn(parser: &mut Parser) -> ParseResult<ExprKind>;
+type InfixParseFn = fn(parser: &mut Parser, ExprKind) -> ParseResult<ExprKind>;
+
+#[derive(Debug, PartialOrd, Ord, PartialEq, Eq)]
+enum Precedence {
+    Lowest,
+    Equals,
+    LessGreater,
+    Sum,
+    Product,
+    Call,
+    Index,
+}
+
+impl From<TokenKind> for Precedence {
+    fn from(value: TokenKind) -> Self {
+        use TokenKind::*;
+        match value {
+            And => Self::Equals,
+            Or => Self::Equals,
+            EQ => Self::Equals,
+            NEQ => Self::Equals,
+            LT => Self::LessGreater,
+            GT => Self::LessGreater,
+            Plus => Self::Sum,
+            Minus => Self::Sum,
+            Slash => Self::Product,
+            Asterisk => Self::Product,
+            LParen => Self::Call,
+            LBracket => Self::Index,
+            Pipe => Self::Index,
+            _ => Self::Lowest,
+        }
+    }
+}
+
+fn map_prefix_fn(kind: &TokenKind) -> Option<PrefixParseFn> {
+    use TokenKind::*;
+    match kind {
+        Ident => Some(Parser::parse_ident),
+        Int => Some(Parser::parse_number_literal),
+        Float => Some(Parser::parse_number_literal),
+        True => Some(Parser::parse_boolean),
+        False => Some(Parser::parse_boolean),
+        Str => Some(Parser::parse_str_literal),
+        Null => Some(Parser::parse_null),
+        LBracket => Some(Parser::parse_list_literal),
+        SelectAll => Some(Parser::parse_select_all),
+        Select => Some(Parser::parse_select),
+        _ => None,
+    }
+}
+
+fn map_infix_fn(kind: &TokenKind) -> Option<InfixParseFn> {
+    use TokenKind::*;
+    match kind {
+        Plus => Some(Parser::parse_infix),
+        Minus => Some(Parser::parse_infix),
+        Slash => Some(Parser::parse_infix),
+        Asterisk => Some(Parser::parse_infix),
+        EQ => Some(Parser::parse_infix),
+        NEQ => Some(Parser::parse_infix),
+        LT => Some(Parser::parse_infix),
+        GT => Some(Parser::parse_infix),
+        LTE => Some(Parser::parse_infix),
+        GTE => Some(Parser::parse_infix),
+        And => Some(Parser::parse_infix),
+        Or => Some(Parser::parse_infix),
+        LBracket => Some(Parser::parse_index),
+        LParen => Some(Parser::parse_call_expr),
+        Pipe => Some(Parser::parse_chain_expr),
+        _ => None,
+    }
+}
 
 #[derive(Debug)]
 pub enum ParseError {
     UnexpectedToken(TokenKind, TokenKind),
     InvalidToken(TokenKind),
     InvalidNumber,
+    InvalidFnCall,
     DefaultFnParamBefore,
+    UnknownPrefix(TokenKind),
 }
 
 pub struct Parser {
@@ -57,6 +133,14 @@ impl Parser {
         }
     }
 
+    fn peek_precedence(&self) -> Precedence {
+        Precedence::from(self.peek.kind)
+    }
+
+    fn curr_precedence(&self) -> Precedence {
+        Precedence::from(self.curr.kind)
+    }
+
     fn parse_stmt(&mut self) -> ParseResult<StmtKind> {
         match self.curr.kind {
             TokenKind::Def => {
@@ -76,7 +160,7 @@ impl Parser {
                             if self.peek.kind == TokenKind::Assign {
                                 self.next_token();
                                 self.next_token();
-                                default = Some(self.parse_expr()?);
+                                default = Some(self.parse_expr(Precedence::Lowest)?);
                                 has_defaults = true;
                             } else if has_defaults {
                                 // Dont allow non-default params after default params.
@@ -110,14 +194,14 @@ impl Parser {
                     let ident = Identifier::new(self.curr.literal.clone());
                     self.next_token();
                     self.next_token();
-                    let val = self.parse_expr()?;
+                    let val = self.parse_expr(Precedence::Lowest)?;
                     Ok(StmtKind::Assign(ident, val))
                 }
                 _ => self.parse_expr_stmt(),
             },
             TokenKind::Return => {
                 self.next_token();
-                match self.parse_expr() {
+                match self.parse_expr(Precedence::Lowest) {
                     Ok(expr) => Ok(StmtKind::Return(Some(expr))),
                     Err(ParseError::InvalidToken(_)) => Ok(StmtKind::Return(None)),
                     Err(e) => Err(e),
@@ -134,14 +218,21 @@ impl Parser {
         let mut binding = None;
         if self.peek.kind == TokenKind::Ident {
             self.next_token();
-            binding = Some(Identifier::new(self.curr.literal.clone()));
+            let link_binding = Identifier::new(self.curr.literal.clone());
+            self.expect_peek(TokenKind::Comma)?;
+            self.expect_peek(TokenKind::Ident)?;
+            let depth_binding = Identifier::new(self.curr.literal.clone());
+            binding = Some(CrawlBindings {
+                link: link_binding,
+                depth: depth_binding,
+            });
         }
 
         let mut filter = None;
         if self.peek.kind == TokenKind::Where {
             self.next_token();
             self.next_token();
-            let expr = self.parse_expr()?;
+            let expr = self.parse_expr(Precedence::Lowest)?;
             filter = Some(expr);
         }
         self.expect_peek(TokenKind::Do)?;
@@ -172,7 +263,7 @@ impl Parser {
 
     fn parse_if(&mut self) -> ParseResult<IfLiteral> {
         self.next_token();
-        let cond = self.parse_expr()?;
+        let cond = self.parse_expr(Precedence::Lowest)?;
         self.expect_peek(TokenKind::Do)?;
         self.next_token();
         let block = self.parse_block(vec![TokenKind::End, TokenKind::Elif, TokenKind::Else])?;
@@ -211,7 +302,7 @@ impl Parser {
         let ident = Identifier::new(self.curr.literal.clone());
         self.expect_peek(TokenKind::In)?;
         self.next_token();
-        let iterable = self.parse_expr()?;
+        let iterable = self.parse_expr(Precedence::Lowest)?;
         self.expect_peek(TokenKind::Do)?;
         self.next_token();
         let block = self.parse_block(vec![TokenKind::End])?;
@@ -223,14 +314,14 @@ impl Parser {
 
     fn parse_use_stmt(&mut self) -> ParseResult<StmtKind> {
         self.next_token();
-        let import = self.parse_expr()?;
+        let import = self.parse_expr(Precedence::Lowest)?;
         Ok(StmtKind::Use(import))
     }
 
     /// `goto "https://stackoverflow.com"`
     fn parse_goto_stmt(&mut self) -> ParseResult<StmtKind> {
         self.next_token();
-        let url = self.parse_expr()?;
+        let url = self.parse_expr(Precedence::Lowest)?;
         let stmt = StmtKind::Goto(url);
         Ok(stmt)
     }
@@ -243,7 +334,7 @@ impl Parser {
     }
 
     fn parse_expr_stmt(&mut self) -> ParseResult<StmtKind> {
-        let expr = self.parse_expr()?;
+        let expr = self.parse_expr(Precedence::Lowest)?;
         Ok(StmtKind::Expr(expr))
     }
 
@@ -265,7 +356,7 @@ impl Parser {
             let ident = Identifier::new(self.curr.literal.clone());
             self.expect_peek(TokenKind::Colon)?;
             self.next_token();
-            let val = self.parse_expr()?;
+            let val = self.parse_expr(Precedence::Lowest)?;
             pairs.insert(ident, val);
             if self.peek.kind == TokenKind::Comma {
                 self.next_token();
@@ -275,144 +366,165 @@ impl Parser {
         Ok(HashLiteral { pairs })
     }
 
-    fn parse_single_expr(&mut self) -> ParseResult<ExprKind> {
-        let lhs = match self.curr.kind {
-            TokenKind::False => Ok(ExprKind::Boolean(false)),
-            TokenKind::True => Ok(ExprKind::Boolean(true)),
-            TokenKind::Ident => {
-                // Parse multiple types of ident expressions
-                match self.peek.kind {
-                    TokenKind::LParen => self.parse_call_expr(),
-                    _ => Ok(ExprKind::Ident(Identifier::new(self.curr.literal.clone()))),
-                }
-            }
-            TokenKind::LBracket => {
-                self.next_token();
-                let mut content = vec![];
-                while let Ok(expr) = self.parse_expr() {
-                    content.push(expr);
-                    self.next_token();
-                    if self.curr.kind == TokenKind::Comma {
-                        self.next_token();
-                    }
-                }
-
-                Ok(ExprKind::List(content))
-            }
-            TokenKind::Select => match self.peek.kind {
-                TokenKind::Str => {
-                    self.next_token();
-                    Ok(ExprKind::Select(self.curr.literal.clone(), None))
-                }
-                TokenKind::LParen => {
-                    // @TODO refactor
-                    self.next_token();
-                    self.expect_peek(TokenKind::Ident)?;
-                    let ident = Identifier::new(self.curr.literal.clone());
-                    self.expect_peek(TokenKind::RParen)?;
-                    self.expect_peek(TokenKind::Str)?;
-                    let expr = ExprKind::Select(self.curr.literal.clone(), Some(ident));
-                    Ok(expr)
-                }
-                _ => Err(ParseError::InvalidToken(self.peek.kind)),
-            },
-            TokenKind::SelectAll => match self.peek.kind {
-                TokenKind::Str => {
-                    self.next_token();
-                    Ok(ExprKind::SelectAll(self.curr.literal.clone(), None))
-                }
-                TokenKind::LParen => {
-                    // @TODO refactor
-                    self.next_token();
-                    self.expect_peek(TokenKind::Ident)?;
-                    let ident = Identifier::new(self.curr.literal.clone());
-                    self.expect_peek(TokenKind::RParen)?;
-                    self.expect_peek(TokenKind::Str)?;
-                    let expr = ExprKind::SelectAll(self.curr.literal.clone(), Some(ident));
-                    Ok(expr)
-                }
-                _ => Err(ParseError::InvalidToken(self.peek.kind)),
-            },
-            TokenKind::Str => Ok(ExprKind::Str(self.curr.literal.clone())),
-            TokenKind::Int => Ok(ExprKind::Number(
-                self.curr
-                    .literal
-                    .parse::<u64>()
-                    .map_err(|_| ParseError::InvalidNumber)? as f64,
-            )),
-            TokenKind::Float => Ok(ExprKind::Number(
-                self.curr
-                    .literal
-                    .parse()
-                    .map_err(|_| ParseError::InvalidNumber)?,
-            )),
-            TokenKind::Null => Ok(ExprKind::Null),
-            t if t.is_prefix() => {
-                self.next_token();
-                let rhs = self.parse_expr()?;
-                Ok(ExprKind::Prefix(Box::new(rhs), t))
-            }
-            _ => Err(ParseError::InvalidToken(self.curr.kind)),
-        }?;
-
-        if self.peek.kind.is_infix() {
-            self.parse_infix(lhs)
-            // self.next_token();
-            // let op = self.curr.kind;
-            // self.next_token();
-            // let rhs = self.parse_expr()?;
-            // Ok(ExprKind::Infix(Box::new(lhs), op, Box::new(rhs)))
-        } else if self.peek.kind == TokenKind::LBracket {
-            let infix = self.parse_infix(lhs);
-            self.expect_peek(TokenKind::RBracket)?;
-            infix
-        } else {
-            Ok(lhs)
-        }
+    fn parse_number_literal(&mut self) -> ParseResult<ExprKind> {
+        Ok(ExprKind::Number(
+            self.curr
+                .literal
+                .parse::<f64>()
+                .map_err(|_| ParseError::InvalidNumber)?,
+        ))
     }
 
-    fn parse_infix(&mut self, lhs: ExprKind) -> ParseResult<ExprKind> {
-        self.next_token();
-        let op = self.curr.kind;
-        self.next_token();
-        let rhs = self.parse_expr()?;
-        Ok(ExprKind::Infix(Box::new(lhs), op, Box::new(rhs)))
+    fn parse_boolean(&mut self) -> ParseResult<ExprKind> {
+        let val = self.curr.kind == TokenKind::True;
+        Ok(ExprKind::Boolean(val))
     }
 
-    fn parse_expr(&mut self) -> ParseResult<ExprKind> {
-        let expr = self.parse_single_expr()?;
-
-        if self.peek.kind == TokenKind::Pipe {
-            let mut exprs = vec![expr];
-
-            while self.peek.kind == TokenKind::Pipe {
-                self.next_token();
-                self.next_token();
-                let next_expr = self.parse_single_expr()?;
-                exprs.push(next_expr);
-            }
-
-            Ok(ExprKind::Chain(exprs))
-        } else {
-            Ok(expr)
-        }
+    fn parse_str_literal(&mut self) -> ParseResult<ExprKind> {
+        Ok(ExprKind::Str(self.curr.literal.clone()))
     }
 
-    fn parse_call_expr(&mut self) -> ParseResult<ExprKind> {
-        let ident = Identifier::new(self.curr.literal.clone());
+    fn parse_null(&mut self) -> ParseResult<ExprKind> {
+        Ok(ExprKind::Null)
+    }
+
+    fn parse_list_literal(&mut self) -> ParseResult<ExprKind> {
         self.next_token();
-        let mut params = Vec::new();
-        while self.peek.kind == TokenKind::Comma || self.peek.kind != TokenKind::RParen {
+        let mut content = vec![];
+        while let Ok(expr) = self.parse_expr(Precedence::Lowest) {
+            content.push(expr);
             self.next_token();
             if self.curr.kind == TokenKind::Comma {
                 self.next_token();
             }
-            let param = self.parse_expr()?;
-            params.push(param);
         }
 
-        self.expect_peek(TokenKind::RParen)?;
-        Ok(ExprKind::Call(ident, params))
+        Ok(ExprKind::List(content))
+    }
+
+    fn parse_select(&mut self) -> ParseResult<ExprKind> {
+        match self.peek.kind {
+            TokenKind::Str => {
+                self.next_token();
+                Ok(ExprKind::Select(self.curr.literal.clone(), None))
+            }
+            TokenKind::LParen => {
+                // @TODO refactor
+                self.next_token();
+                self.expect_peek(TokenKind::Ident)?;
+                let ident = Identifier::new(self.curr.literal.clone());
+                self.expect_peek(TokenKind::RParen)?;
+                self.expect_peek(TokenKind::Str)?;
+                let expr = ExprKind::Select(self.curr.literal.clone(), Some(ident));
+                Ok(expr)
+            }
+            _ => Err(ParseError::InvalidToken(self.peek.kind)),
+        }
+    }
+
+    fn parse_select_all(&mut self) -> ParseResult<ExprKind> {
+        match self.peek.kind {
+            TokenKind::Str => {
+                self.next_token();
+                Ok(ExprKind::SelectAll(self.curr.literal.clone(), None))
+            }
+            TokenKind::LParen => {
+                // @TODO refactor
+                self.next_token();
+                self.expect_peek(TokenKind::Ident)?;
+                let ident = Identifier::new(self.curr.literal.clone());
+                self.expect_peek(TokenKind::RParen)?;
+                self.expect_peek(TokenKind::Str)?;
+                let expr = ExprKind::SelectAll(self.curr.literal.clone(), Some(ident));
+                Ok(expr)
+            }
+            _ => Err(ParseError::InvalidToken(self.peek.kind)),
+        }
+    }
+
+    fn parse_infix(&mut self, lhs: ExprKind) -> ParseResult<ExprKind> {
+        // self.next_token();
+        let op = self.curr.kind;
+        let prec = self.curr_precedence();
+        self.next_token();
+        let rhs = self.parse_expr(prec)?;
+        Ok(ExprKind::Infix(Box::new(lhs), op, Box::new(rhs)))
+    }
+
+    fn parse_index(&mut self, ident: ExprKind) -> ParseResult<ExprKind> {
+        let infix = self.parse_infix(ident)?;
+        self.expect_peek(TokenKind::RBracket)?;
+        Ok(infix)
+    }
+
+    fn parse_expr(&mut self, precedence: Precedence) -> ParseResult<ExprKind> {
+        match map_prefix_fn(&self.curr.kind) {
+            None => Err(ParseError::UnknownPrefix(self.curr.kind)),
+            Some(f) => {
+                let mut lhs = f(self)?;
+                while precedence < self.peek_precedence() {
+                    match map_infix_fn(&self.peek.kind) {
+                        None => return Ok(lhs),
+                        Some(in_fn) => {
+                            self.next_token();
+                            lhs = in_fn(self, lhs)?;
+                        }
+                    }
+                }
+
+                Ok(lhs)
+            }
+        }
+    }
+
+    fn parse_ident(&mut self) -> ParseResult<ExprKind> {
+        Ok(ExprKind::Ident(Identifier::new(self.curr.literal.clone())))
+    }
+
+    fn parse_chain_expr(&mut self, first: ExprKind) -> ParseResult<ExprKind> {
+        let mut exprs = vec![first];
+
+        while self.curr.kind == TokenKind::Pipe {
+            self.next_token();
+            let id = self.parse_ident()?;
+            self.expect_peek(TokenKind::LParen)?;
+            let call = self.parse_call_expr(id)?;
+            exprs.push(call);
+        }
+
+        Ok(ExprKind::Chain(exprs))
+    }
+
+    fn parse_expr_list(&mut self, end: TokenKind) -> ParseResult<Vec<ExprKind>> {
+        let mut args: Vec<ExprKind> = Vec::new();
+        if self.peek.kind == end {
+            self.next_token();
+            return Ok(args);
+        }
+
+        self.next_token();
+        let expr = self.parse_expr(Precedence::Lowest)?;
+        args.push(expr);
+
+        while self.peek.kind == TokenKind::Comma {
+            self.next_token();
+            self.next_token();
+            let e = self.parse_expr(Precedence::Lowest)?;
+            args.push(e);
+        }
+
+        self.expect_peek(end)?;
+        Ok(args)
+    }
+
+    fn parse_call_expr(&mut self, func: ExprKind) -> ParseResult<ExprKind> {
+        match func {
+            ExprKind::Ident(ident) => {
+                let args = self.parse_expr_list(TokenKind::RParen)?;
+                Ok(ExprKind::Call(ident, args))
+            }
+            _ => Err(ParseError::InvalidFnCall),
+        }
     }
 }
 
@@ -436,8 +548,8 @@ mod tests {
         stmts[0].clone()
     }
 
-    #[test_case(r#"goto "foo""#, StmtKind::Goto(ExprKind::Str("foo".into())))]
-    #[test_case("scrape {}", StmtKind::Scrape(HashLiteral::default()))]
+    #[test_case(r#"goto "foo""#, StmtKind::Goto(ExprKind::Str("foo".into())); "simple goto")]
+    #[test_case("scrape {}", StmtKind::Scrape(HashLiteral::default()); "empty scrape")]
     #[test_case(
         r#"scrape { a: $"b" }"#,
         StmtKind::Scrape(
@@ -446,7 +558,7 @@ mod tests {
                     (Identifier::new("a".into()), ExprKind::Select("b".into(), None))
                 ]
             )
-        )
+        ); "scrape with single key"
     )]
     #[test_case(
         r#"scrape { a: $"b", c: $"d" }"#,
@@ -457,7 +569,7 @@ mod tests {
                     (Identifier::new("c".into()), ExprKind::Select("d".into(), None))
                 ]
             )
-        )
+        ); "scrape with multi keys"
     )]
     #[test_case(
         r#"scrape { a: $$"b" }"#,
@@ -467,7 +579,7 @@ mod tests {
                     (Identifier::new("a".into()), ExprKind::SelectAll("b".into(), None)),
                 ]
             )
-        )
+        ); "scrape with select all key"
     )]
     #[test_case(
         r#"scrape { a: fn("a") }"#,
@@ -477,12 +589,13 @@ mod tests {
                     (
                         Identifier::new("a".into()),
                         ExprKind::Call(
-                            Identifier::new("fn".into()), vec![ExprKind::Str("a".into())]
+                            Identifier::new("fn".into()),
+                            vec![ExprKind::Str("a".into())]
                         )
                     )
                 ]
             )
-        )
+        ); "scrape with fn key"
     )]
     #[test_case(
         r#"scrape { a: $"b" |> fn("a") }"#,
@@ -501,13 +614,13 @@ mod tests {
                     )
                 ]
             )
-        )
+        ); "scrape with pipe key"
     )]
     #[test_case(
         r#"for node in $$"a" do end"#,
         StmtKind::ForLoop(
             ForLoop::new(Identifier::new("node".into()), ExprKind::SelectAll("a".into(), None), Block::new(vec![]))
-        )
+        ); "for loop empty body"
     )]
     #[test_case(
         r#"for node in $$"a" do $"a" end"#,
@@ -515,30 +628,30 @@ mod tests {
             ForLoop::new(Identifier::new("node".into()), ExprKind::SelectAll("a".into(), None), Block::new(vec![
                 StmtKind::Expr(ExprKind::Select("a".into(), None))
             ]))
-        )
+        ); "for loop single select bodyd"
     )]
     #[test_case(
         r#"x = "a""#,
         StmtKind::Assign(
             Identifier::new("x".into()),
             ExprKind::Str("a".into())
-        )
+        ); "single assign"
     )]
-    #[test_case(r#"null"#, StmtKind::Expr(ExprKind::Null))]
+    #[test_case(r#"null"#, StmtKind::Expr(ExprKind::Null); "null expr stmt")]
     #[test_case(
         r#"for node in $$"a" do scrape {} end"#,
         StmtKind::ForLoop(
             ForLoop::new(Identifier::new("node".into()), ExprKind::SelectAll("a".into(), None), Block::new(vec![
                 StmtKind::Scrape(HashLiteral::default())
             ]))
-        )
+        ); "for loop with scrape body"
     )]
     #[test_case(
         r#"x = 1 == 2"#,
         StmtKind::Assign(
             Identifier::new("x".to_string()),
             ExprKind::Infix(Box::new(ExprKind::Number(1.)), TokenKind::EQ, Box::new(ExprKind::Number(2.)))
-        )
+        ); "assign eq infix"
     )]
     #[test_case(
         r#"f(a, b)"#,
@@ -550,7 +663,7 @@ mod tests {
                     ExprKind::Ident(Identifier::new("b".into()))
                 ]
             )
-        )
+        ); "fn call with multi params"
     )]
     #[test_case(
         r#"def f() do end"#,
@@ -561,7 +674,7 @@ mod tests {
                 ],
                 Block::default()
             )
-        )
+        ); "fn definition"
     )]
     #[test_case(
         r#"def f(a, b) do end"#,
@@ -574,7 +687,7 @@ mod tests {
                 ],
                 Block::default()
             )
-        )
+        ); "fn def multi params"
     )]
     #[test_case(
         r#"def f(a = null) do end"#,
@@ -586,7 +699,7 @@ mod tests {
                 ],
                 Block::default()
             )
-        )
+        ); "fn def default param"
     )]
     #[test_case(
         r#"[1, "a"]"#,
@@ -597,7 +710,7 @@ mod tests {
                     ExprKind::Str("a".into()),
                 ]
             )
-        )
+        ); "list literal"
     )]
     #[test_case(
         r#"for a in [1, 2] do end"#,
@@ -606,13 +719,13 @@ mod tests {
                 ExprKind::Number(1.0),
                 ExprKind::Number(2.0),
             ]), Block::new(vec![]))
-        )
+        ); "loop over list literal"
     )]
     #[test_case(
         "try catch end",
-        StmtKind::TryCatch(Block::default(), Some(Block::default()))
+        StmtKind::TryCatch(Block::default(), Some(Block::default())); "empty try catch"
     )]
-    #[test_case("try end", StmtKind::TryCatch(Block::default(), None))]
+    #[test_case("try end", StmtKind::TryCatch(Block::default(), None); "try catch with no catch")]
     #[test_case(
         "a[0]",
         StmtKind::Expr(
@@ -621,21 +734,24 @@ mod tests {
                 TokenKind::LBracket,
                 Box::new(ExprKind::Number(0.))
             )
-        )
+        ); "index"
     )]
     #[test_case(
         "crawl do end",
-        StmtKind::Crawl(CrawlLiteral::new(None, None, Block::default()))
+        StmtKind::Crawl(CrawlLiteral::new(None, None, Block::default())); "empty crawl stmtddddd"
     )]
     #[test_case(
-        "crawl link where true do end",
+        "crawl link, depth where true do end",
         StmtKind::Crawl(
             CrawlLiteral::new(
-                Some(Identifier::new("link".into())),
+                Some(CrawlBindings {
+                    link: Identifier::new("link".into()),
+                    depth: Identifier::new("depth".into())
+                }),
                 Some(ExprKind::Boolean(true)),
                 Block::default()
             )
-        )
+        ); "crawl stmt with bindings"
     )]
     fn test_single_stmt(input: &str, exp: StmtKind) {
         let stmt = extract_first_stmt(input);
