@@ -30,6 +30,7 @@ pub enum TokenKind {
     GTE,
     LTE,
     Bang,
+    DbColon,
 
     // Keywords
     If,
@@ -86,19 +87,6 @@ impl TokenKind {
             "or" => Some(Or),
             _ => None,
         }
-    }
-
-    pub fn is_infix(&self) -> bool {
-        use TokenKind::*;
-        matches!(
-            self,
-            EQ | NEQ | Plus | Minus | Asterisk | Slash | GT | LT | And | Or
-        )
-    }
-
-    pub fn is_prefix(&self) -> bool {
-        use TokenKind::*;
-        matches!(self, Bang)
     }
 }
 

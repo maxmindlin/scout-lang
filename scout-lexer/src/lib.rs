@@ -27,7 +27,13 @@ impl Lexer {
                 '}' => Token::new(RBrace, c.to_string()),
                 '[' => Token::new(LBracket, c.to_string()),
                 ']' => Token::new(RBracket, c.to_string()),
-                ':' => Token::new(Colon, c.to_string()),
+                ':' => match self.peek() {
+                    Some(':') => {
+                        self.next();
+                        Token::new(DbColon, "::".into())
+                    }
+                    _ => Token::new(Colon, ':'.into()),
+                },
                 ',' => Token::new(Comma, c.to_string()),
                 '+' => Token::new(Plus, c.to_string()),
                 '-' => Token::new(Minus, c.to_string()),

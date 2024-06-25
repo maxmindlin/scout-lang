@@ -35,6 +35,8 @@ impl From<TokenKind> for Precedence {
             NEQ => Self::Equals,
             LT => Self::LessGreater,
             GT => Self::LessGreater,
+            LTE => Self::LessGreater,
+            GTE => Self::LessGreater,
             Plus => Self::Sum,
             Minus => Self::Sum,
             Slash => Self::Product,
@@ -42,6 +44,7 @@ impl From<TokenKind> for Precedence {
             LParen => Self::Call,
             LBracket => Self::Index,
             Pipe => Self::Index,
+            DbColon => Self::Index,
             _ => Self::Lowest,
         }
     }
@@ -80,6 +83,7 @@ fn map_infix_fn(kind: &TokenKind) -> Option<InfixParseFn> {
         GTE => Some(Parser::parse_infix),
         And => Some(Parser::parse_infix),
         Or => Some(Parser::parse_infix),
+        DbColon => Some(Parser::parse_infix),
         LBracket => Some(Parser::parse_index),
         LParen => Some(Parser::parse_call_expr),
         Pipe => Some(Parser::parse_chain_expr),
@@ -764,6 +768,20 @@ mod tests {
     #[test_case(
         "!true",
         StmtKind::Expr(ExprKind::Prefix(Box::new(ExprKind::Boolean(true)), TokenKind::Bang,)); "bang prefix"
+    )]
+    #[test_case(
+        "a::b",
+        StmtKind::Expr(
+            ExprKind::Infix(
+                Box::new(
+                    ExprKind::Ident(Identifier::new("a".into()))
+                ),
+                TokenKind::DbColon,
+                Box::new(
+                    ExprKind::Ident(Identifier::new("b".into()))
+                )
+            )
+        ); "db colon"
     )]
     fn test_single_stmt(input: &str, exp: StmtKind) {
         let stmt = extract_first_stmt(input);

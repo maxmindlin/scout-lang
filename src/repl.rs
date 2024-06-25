@@ -11,9 +11,10 @@ const PROMPT: &str = ">> ";
 pub async fn run_repl(
     crawler: &fantoccini::Client,
     results: ScrapeResultsPtr,
+    env: Env,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut rl = Editor::<()>::new();
-    let env = Arc::new(Mutex::new(Env::default()));
+    let env = Arc::new(Mutex::new(env));
     if rl.load_history("history.txt").is_err() {
         println!("No previous history.");
     }

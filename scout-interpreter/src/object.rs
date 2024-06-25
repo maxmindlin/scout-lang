@@ -3,6 +3,8 @@ use std::{collections::HashMap, fmt::Display, sync::Arc};
 use scout_parser::ast::{Block, FnParam, Identifier};
 use serde_json::{json, Value};
 
+use crate::env::EnvPointer;
+
 #[derive(Debug)]
 pub enum Object {
     Null,
@@ -14,6 +16,7 @@ pub enum Object {
     Number(f64),
     Fn(Vec<FnParam>, Block),
     Return(Arc<Object>),
+    Module(EnvPointer),
 }
 
 impl Object {

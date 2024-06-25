@@ -239,6 +239,7 @@ fn eval_statement<'a>(
                 Some(expr) => eval_expression(expr, crawler, env.clone(), results.clone()).await,
             },
             StmtKind::Use(import) => {
+                println!("{import:?}");
                 let file = eval_expression(import, crawler, env.clone(), results.clone()).await?;
                 match &*file {
                     Object::Str(f_str) => {
@@ -254,13 +255,15 @@ fn eval_statement<'a>(
                                 let mut parser = Parser::new(lex);
                                 match parser.parse_program() {
                                     Ok(prgm) => {
-                                        eval(
+                                        let module_env = Arc::new(Mutex::new(Env::default()));
+                                        let _ = eval(
                                             NodeKind::Program(prgm),
                                             crawler,
-                                            env.clone(),
+                                            module_env.clone(),
                                             results.clone(),
                                         )
-                                        .await
+                                        .await?;
+                                        Ok(Arc::new(Object::Module(module_env)))
                                     }
                                     Err(_) => Err(EvalError::InvalidImport),
                                 }
@@ -620,6 +623,14 @@ fn eval_infix(lhs: Arc<Object>, op: &TokenKind, rhs: Arc<Object>) -> EvalResult 
         TokenKind::Or => Ok(Arc::new(Object::Boolean(
             lhs.is_truthy() || rhs.is_truthy(),
         ))),
+        TokenKind::DbColon => eval_dbcolon_op(lhs, rhs),
+        _ => Err(EvalError::UnknownInfixOp),
+    }
+}
+
+fn eval_dbcolon_op(lhs: Arc<Object>, rhs: Arc<Object>) -> EvalResult {
+    println!("lhs {lhs:?}, rhs {rhs:?}");
+    match (&*lhs, &*rhs) {
         _ => Err(EvalError::UnknownInfixOp),
     }
 }

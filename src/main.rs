@@ -1,4 +1,4 @@
-use std::{env, fs, process::Command, sync::Arc};
+use std::{env, fs, path::Path, process::Command, sync::Arc};
 
 use futures::lock::Mutex;
 use repl::run_repl;
@@ -25,19 +25,35 @@ fn default_port() -> usize {
     4444
 }
 
+async fn load_std(
+    crawler: &fantoccini::Client,
+    results: ScrapeResultsPtr,
+) -> Result<Env, Box<dyn std::error::Error>> {
+    let env = Arc::new(Mutex::new(Env::default()));
+    let std_path = Path::new("./scout-lib/lib.sct");
+    let contents = fs::read_to_string(std_path)?;
+    let lex = Lexer::new(&contents);
+    let mut parser = Parser::new(lex);
+
+    let prgm = parser.parse_program().expect("failed to load std lib");
+    let _ = eval(NodeKind::Program(prgm), crawler, env, results);
+    unimplemented!()
+}
+
 async fn run(
     file: Option<String>,
     crawler: &fantoccini::Client,
     results: ScrapeResultsPtr,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    let env = Env::default();
     match file {
-        None => run_repl(crawler, results).await,
+        None => run_repl(crawler, results, env).await,
         Some(f) => {
             let contents = fs::read_to_string(f)?;
 
             let lex = Lexer::new(&contents);
             let mut parser = Parser::new(lex);
-            let env = Arc::new(Mutex::new(Env::default()));
+            let env = Arc::new(Mutex::new(env));
             match parser.parse_program() {
                 Ok(prgm) => {
                     let res = eval(NodeKind::Program(prgm), crawler, env, results).await;
