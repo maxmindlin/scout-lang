@@ -367,7 +367,7 @@ fn eval_crawl<'a>(
 
 async fn wait_for_goto_ready() {
     // @TODO: Need a better way to determine that a page is "done"
-    sleep(Duration::from_secs(1));
+    sleep(Duration::from_millis(50));
 }
 
 async fn eval_block(
