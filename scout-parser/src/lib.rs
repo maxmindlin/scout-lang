@@ -60,6 +60,7 @@ fn map_prefix_fn(kind: &TokenKind) -> Option<PrefixParseFn> {
         LBracket => Some(Parser::parse_list_literal),
         SelectAll => Some(Parser::parse_select_all),
         Select => Some(Parser::parse_select),
+        Bang => Some(Parser::parse_prefix),
         _ => None,
     }
 }
@@ -268,6 +269,13 @@ impl Parser {
         self.next_token();
         let block = self.parse_block(vec![TokenKind::End, TokenKind::Elif, TokenKind::Else])?;
         Ok(IfLiteral { cond, block })
+    }
+
+    fn parse_prefix(&mut self) -> ParseResult<ExprKind> {
+        let op = self.curr.kind;
+        self.next_token();
+        let expr = self.parse_expr(Precedence::Lowest)?;
+        Ok(ExprKind::Prefix(Box::new(expr), op))
     }
 
     fn parse_block(&mut self, finalizers: Vec<TokenKind>) -> ParseResult<Block> {
@@ -752,6 +760,10 @@ mod tests {
                 Block::default()
             )
         ); "crawl stmt with bindings"
+    )]
+    #[test_case(
+        "!true",
+        StmtKind::Expr(ExprKind::Prefix(Box::new(ExprKind::Boolean(true)), TokenKind::Bang,)); "bang prefix"
     )]
     fn test_single_stmt(input: &str, exp: StmtKind) {
         let stmt = extract_first_stmt(input);

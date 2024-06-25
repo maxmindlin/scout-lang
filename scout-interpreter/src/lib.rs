@@ -577,7 +577,7 @@ fn eval_expression<'a>(
             ExprKind::Infix(lhs, op, rhs) => {
                 let l_obj = eval_expression(lhs, crawler, env.clone(), results.clone()).await?;
                 let r_obj = eval_expression(rhs, crawler, env.clone(), results.clone()).await?;
-                let res = eval_op(l_obj.clone(), op, r_obj.clone())?;
+                let res = eval_infix(l_obj.clone(), op, r_obj.clone())?;
                 Ok(res)
             }
             ExprKind::Boolean(val) => Ok(Arc::new(Object::Boolean(*val))),
@@ -601,7 +601,7 @@ fn eval_expression<'a>(
     .boxed()
 }
 
-fn eval_op(lhs: Arc<Object>, op: &TokenKind, rhs: Arc<Object>) -> EvalResult {
+fn eval_infix(lhs: Arc<Object>, op: &TokenKind, rhs: Arc<Object>) -> EvalResult {
     match op {
         TokenKind::EQ => Ok(Arc::new(Object::Boolean(lhs == rhs))),
         TokenKind::NEQ => Ok(Arc::new(Object::Boolean(lhs != rhs))),
