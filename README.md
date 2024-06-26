@@ -36,7 +36,12 @@ See [Releases](https://github.com/maxmindlin/scout-lang/releases) for up to date
 
 # Usage
 
-The `scout` binary ran with a filename will read and interpret a script file. Without a script will start the REPL. Run `scout --help` to see additional options.
+The `scout` binary ran with a filename will read and interpret a script file. Without a script will start the REPL.
+
+Available ENV variables:
+- `SCOUT_DEBUG`: Whether or not to open the debug browser. Defaults to `false`.
+- `SCOUT_PORT`: Which port to run Scout on. Defaults to `4444`.
+- `SCOUT_PROXY`: An optional URL to proxy requests to. Defaults to none.
 
 # License
 
