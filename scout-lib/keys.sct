@@ -56,20 +56,6 @@ F12 = "\u{e03c}"
 META = "\u{e03d}"
 COMMAND = "\u{e03d}"
 
-
-// links returns a list of nodes
-// that are anchor elements.
-//
-// Optionally provide a scope to limit
-// the search space.
-def links(scope = null) do
-  if scope do
-    return $$(scope)"a[href]" |> href()
-  end
-
-  $$"a[href]" |> href()
-end
-
 // Executes a key press action with
 // the given key unicode value.
 def press(code) do

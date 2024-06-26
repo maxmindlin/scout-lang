@@ -1,4 +1,4 @@
-use std::{env, sync::Arc};
+use std::{env, sync::Arc, thread::sleep, time::Duration};
 
 use fantoccini::{
     actions::{InputSource, KeyAction, KeyActions},
@@ -33,6 +33,7 @@ pub enum BuiltinKind {
     KeyPress,
     Number,
     Url,
+    Sleep,
 }
 
 impl BuiltinKind {
@@ -53,6 +54,7 @@ impl BuiltinKind {
             "contains" => Some(Contains),
             "type" => Some(Type),
             "key_action" => Some(KeyPress),
+            "sleep" => Some(Sleep),
             _ => None,
         }
     }
@@ -65,6 +67,15 @@ impl BuiltinKind {
     ) -> EvalResult {
         use BuiltinKind::*;
         match self {
+            Sleep => {
+                assert_param_len!(args, 1);
+                if let Object::Number(ms) = &*args[0] {
+                    sleep(Duration::from_millis(ms.round() as u64));
+                    Ok(Arc::new(Object::Null))
+                } else {
+                    Err(EvalError::InvalidFnParams)
+                }
+            }
             Url => {
                 let url = crawler.current_url().await?;
                 Ok(Arc::new(Object::Str(url.to_string())))
@@ -87,8 +98,8 @@ impl BuiltinKind {
             Args => {
                 let env_args = env::args().collect::<Vec<String>>();
                 let mut out = Vec::new();
-                // start at 2 because idx 0 is the executable location & idx 1 is the filename
-                for idx in 2..env_args.len() {
+                // start at 1 because idx 0 is the executable location
+                for idx in 1..env_args.len() {
                     out.push(Arc::new(Object::Str(env_args[idx].clone())));
                 }
                 Ok(Arc::new(Object::List(out)))

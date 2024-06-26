@@ -1,0 +1,12 @@
+// links returns a list of nodes
+// that are anchor elements.
+//
+// Optionally provide a scope to limit
+// the search space.
+def links(scope = null) do
+  if scope do
+    return $$(scope)"a[href]" |> href()
+  end
+
+  $$"a[href]" |> href()
+end

@@ -7,7 +7,7 @@ use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::sync::{Arc, Weak};
 
-pub(crate) type EnvPointer = Arc<Mutex<Env>>;
+pub type EnvPointer = Arc<Mutex<Env>>;
 
 #[derive(Debug, Default)]
 pub struct Env {

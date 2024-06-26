@@ -1,5 +1,7 @@
 use std::collections::HashSet;
+use std::env::current_dir;
 use std::fs;
+use std::path::{Path, PathBuf};
 use std::thread::sleep;
 use std::time::Duration;
 use std::{collections::HashMap, sync::Arc};
@@ -8,6 +10,7 @@ use env::EnvPointer;
 use fantoccini::Locator;
 use futures::lock::Mutex;
 use futures::{future::BoxFuture, FutureExt};
+use import::ResolvedMod;
 use object::{obj_map_to_json, Object};
 use scout_lexer::{Lexer, TokenKind};
 use scout_parser::ast::{
@@ -17,10 +20,12 @@ use scout_parser::Parser;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
 
+use crate::import::resolve_module;
 use crate::{builtin::BuiltinKind, env::Env};
 
 pub mod builtin;
 pub mod env;
+pub mod import;
 pub mod object;
 
 pub type EvalResult = Result<Arc<Object>, EvalError>;
@@ -239,40 +244,11 @@ fn eval_statement<'a>(
                 Some(expr) => eval_expression(expr, crawler, env.clone(), results.clone()).await,
             },
             StmtKind::Use(import) => {
-                println!("{import:?}");
-                let file = eval_expression(import, crawler, env.clone(), results.clone()).await?;
-                match &*file {
-                    Object::Str(f_str) => {
-                        let curr_dir = std::env::current_dir().map_err(|_| EvalError::OSError)?;
-                        let f_path = std::path::Path::new(f_str);
-                        let mut path = curr_dir.join(f_path);
-                        path.set_extension("sct");
-                        match path.to_str() {
-                            Some(path) => {
-                                let content =
-                                    fs::read_to_string(path).map_err(|_| EvalError::OSError)?;
-                                let lex = Lexer::new(&content);
-                                let mut parser = Parser::new(lex);
-                                match parser.parse_program() {
-                                    Ok(prgm) => {
-                                        let module_env = Arc::new(Mutex::new(Env::default()));
-                                        let _ = eval(
-                                            NodeKind::Program(prgm),
-                                            crawler,
-                                            module_env.clone(),
-                                            results.clone(),
-                                        )
-                                        .await?;
-                                        Ok(Arc::new(Object::Module(module_env)))
-                                    }
-                                    Err(_) => Err(EvalError::InvalidImport),
-                                }
-                            }
-                            None => Err(EvalError::InvalidImport),
-                        }
-                    }
-                    _ => Err(EvalError::InvalidImport),
-                }
+                let resolved = resolve_module(import)?;
+                let path = std::env::current_dir()
+                    .map_err(|_| EvalError::OSError)?
+                    .join(&resolved.filepath);
+                eval_use_chain(path, &resolved.ident, crawler, env.clone(), results.clone()).await
             }
             StmtKind::Crawl(lit) => {
                 let mut visited = HashSet::new();
@@ -281,6 +257,96 @@ fn eval_statement<'a>(
 
                 Ok(Arc::new(Object::Null))
             }
+        }
+    }
+    .boxed()
+}
+
+fn eval_use_chain<'a>(
+    path: PathBuf,
+    ident: &'a Identifier,
+    crawler: &'a fantoccini::Client,
+    env: EnvPointer,
+    results: ScrapeResultsPtr,
+) -> BoxFuture<'a, EvalResult> {
+    async move {
+        if path.with_extension("sct").exists() {
+            let content =
+                fs::read_to_string(path.with_extension("sct")).map_err(|_| EvalError::OSError)?;
+            let lex = Lexer::new(&content);
+            let mut parser = Parser::new(lex);
+            match parser.parse_program() {
+                Ok(prgm) => {
+                    let module_env = Arc::new(Mutex::new(Env::default()));
+                    let _ = eval(
+                        NodeKind::Program(prgm),
+                        crawler,
+                        module_env.clone(),
+                        results.clone(),
+                    )
+                    .await?;
+                    env.lock()
+                        .await
+                        .set(ident, Arc::new(Object::Module(module_env)))
+                        .await;
+                    Ok(Arc::new(Object::Null))
+                }
+                Err(_) => Err(EvalError::InvalidImport),
+            }
+        } else if path
+            .parent()
+            .ok_or(EvalError::InvalidImport)?
+            .with_extension("sct")
+            .exists()
+        {
+            // this is safe because of the if condition
+            let parent_module_path = path.parent().unwrap();
+            let parent_module = parent_module_path
+                .file_name()
+                .ok_or(EvalError::InvalidImport)?
+                .to_str()
+                .ok_or(EvalError::InvalidImport)?
+                .to_string();
+            let parent_ident = Identifier::new(parent_module);
+            let mb_obj = env.lock().await.get(&parent_ident).await;
+            match mb_obj {
+                Some(obj) => match &*obj {
+                    // Parent module is already loaded, so simply get the object
+                    // from the parent module env and put it into the current env
+                    Object::Module(mod_env) => {
+                        let final_name = path
+                            .file_name()
+                            .ok_or(EvalError::InvalidImport)?
+                            .to_str()
+                            .ok_or(EvalError::InvalidImport)?
+                            .to_string();
+                        let final_ident = Identifier::new(final_name);
+                        let obj_exists = mod_env.lock().await.get(&final_ident).await;
+                        if let Some(obj) = obj_exists {
+                            env.lock().await.set(&final_ident, obj.clone()).await;
+                            Ok(Arc::new(Object::Null))
+                        } else {
+                            Err(EvalError::InvalidImport)
+                        }
+                    }
+                    _ => Err(EvalError::InvalidImport),
+                },
+                None => {
+                    // load the parent module, then load the specific object
+                    eval_use_chain(
+                        parent_module_path.to_path_buf(),
+                        &parent_ident,
+                        crawler,
+                        env.clone(),
+                        results.clone(),
+                    )
+                    .await?;
+                    eval_use_chain(path, ident, crawler, env.clone(), results.clone()).await?;
+                    Ok(Arc::new(Object::Null))
+                }
+            }
+        } else {
+            Err(EvalError::InvalidImport)
         }
     }
     .boxed()
@@ -579,8 +645,15 @@ fn eval_expression<'a>(
             }
             ExprKind::Infix(lhs, op, rhs) => {
                 let l_obj = eval_expression(lhs, crawler, env.clone(), results.clone()).await?;
-                let r_obj = eval_expression(rhs, crawler, env.clone(), results.clone()).await?;
-                let res = eval_infix(l_obj.clone(), op, r_obj.clone())?;
+                let res = eval_infix(
+                    l_obj.clone(),
+                    op,
+                    rhs,
+                    crawler,
+                    env.clone(),
+                    results.clone(),
+                )
+                .await?;
                 Ok(res)
             }
             ExprKind::Boolean(val) => Ok(Arc::new(Object::Boolean(*val))),
@@ -604,7 +677,30 @@ fn eval_expression<'a>(
     .boxed()
 }
 
-fn eval_infix(lhs: Arc<Object>, op: &TokenKind, rhs: Arc<Object>) -> EvalResult {
+async fn eval_infix(
+    lhs: Arc<Object>,
+    op: &TokenKind,
+    rhs: &ExprKind,
+    crawler: &fantoccini::Client,
+    env: EnvPointer,
+    results: ScrapeResultsPtr,
+) -> EvalResult {
+    match op {
+        TokenKind::DbColon => match &*lhs {
+            Object::Module(mod_env) => {
+                mod_env.lock().await.add_outer(env).await;
+                eval_expression(rhs, crawler, mod_env.clone(), results.clone()).await
+            }
+            _ => Err(EvalError::UnknownInfixOp),
+        },
+        _ => {
+            let rhs_obj = eval_expression(rhs, crawler, env.clone(), results.clone()).await?;
+            eval_infix_op(lhs, op, rhs_obj)
+        }
+    }
+}
+
+fn eval_infix_op(lhs: Arc<Object>, op: &TokenKind, rhs: Arc<Object>) -> EvalResult {
     match op {
         TokenKind::EQ => Ok(Arc::new(Object::Boolean(lhs == rhs))),
         TokenKind::NEQ => Ok(Arc::new(Object::Boolean(lhs != rhs))),
@@ -623,14 +719,6 @@ fn eval_infix(lhs: Arc<Object>, op: &TokenKind, rhs: Arc<Object>) -> EvalResult 
         TokenKind::Or => Ok(Arc::new(Object::Boolean(
             lhs.is_truthy() || rhs.is_truthy(),
         ))),
-        TokenKind::DbColon => eval_dbcolon_op(lhs, rhs),
-        _ => Err(EvalError::UnknownInfixOp),
-    }
-}
-
-fn eval_dbcolon_op(lhs: Arc<Object>, rhs: Arc<Object>) -> EvalResult {
-    println!("lhs {lhs:?}, rhs {rhs:?}");
-    match (&*lhs, &*rhs) {
         _ => Err(EvalError::UnknownInfixOp),
     }
 }

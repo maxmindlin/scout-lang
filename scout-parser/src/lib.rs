@@ -41,10 +41,10 @@ impl From<TokenKind> for Precedence {
             Minus => Self::Sum,
             Slash => Self::Product,
             Asterisk => Self::Product,
+            DbColon => Self::Product,
             LParen => Self::Call,
             LBracket => Self::Index,
             Pipe => Self::Index,
-            DbColon => Self::Index,
             _ => Self::Lowest,
         }
     }
