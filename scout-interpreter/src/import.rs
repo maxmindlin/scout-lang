@@ -1,4 +1,7 @@
-use std::path::{Path, PathBuf};
+use std::{
+    env,
+    path::{Path, PathBuf},
+};
 
 use scout_lexer::TokenKind;
 use scout_parser::ast::{ExprKind, Identifier};
@@ -27,7 +30,11 @@ pub fn resolve_module(module: &ExprKind) -> Result<ResolvedMod, EvalError> {
 
 fn resolve_std_file(ident: &Identifier) -> Result<PathBuf, EvalError> {
     if *ident == Identifier::new("std".into()) {
-        let path = Path::new("scout-lib").to_owned();
+        let home = env::var("HOME").map_err(|_| EvalError::OSError)?;
+        let path = Path::new(&home)
+            .join("scout-lang")
+            .join("scout-lib")
+            .to_owned();
         Ok(path)
     } else {
         Ok(Path::new(&ident.name).to_owned())

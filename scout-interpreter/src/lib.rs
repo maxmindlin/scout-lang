@@ -299,7 +299,7 @@ fn eval_use_chain<'a>(
                 .to_str()
                 .ok_or(EvalError::InvalidImport)?
                 .to_string();
-            let dir_name = if dir_name_raw == String::from("scout-lib") {
+            let dir_name = if &dir_name_raw == "scout-lib" {
                 String::from("std")
             } else {
                 dir_name_raw
