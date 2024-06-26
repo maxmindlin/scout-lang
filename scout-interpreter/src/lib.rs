@@ -291,6 +291,46 @@ fn eval_use_chain<'a>(
                 }
                 Err(_) => Err(EvalError::InvalidImport),
             }
+        } else if path.is_dir() {
+            // Loop through every member of the directory and import them to an environment
+            let dir_name_raw = path
+                .file_name()
+                .ok_or(EvalError::InvalidImport)?
+                .to_str()
+                .ok_or(EvalError::InvalidImport)?
+                .to_string();
+            let dir_name = if dir_name_raw == String::from("scout-lib") {
+                String::from("std")
+            } else {
+                dir_name_raw
+            };
+            let mod_env = Arc::new(Mutex::new(Env::default()));
+            for entry in path.read_dir().unwrap() {
+                if let Ok(entry) = entry {
+                    let filename = entry
+                        .path()
+                        .file_stem()
+                        .ok_or(EvalError::InvalidImport)?
+                        .to_str()
+                        .ok_or(EvalError::InvalidImport)?
+                        .to_string();
+                    let sub_ident = Identifier::new(filename);
+                    let p = entry.path();
+
+                    // Ignore error because you could have files that arent valid
+                    // scout modules. But we dont care if they error.
+                    // @TODO: make errors more specific to ignore just these types of error.
+                    let _ =
+                        eval_use_chain(p, &sub_ident, crawler, mod_env.clone(), results.clone())
+                            .await;
+                }
+            }
+            let mod_ident = Identifier::new(dir_name);
+            env.lock()
+                .await
+                .set(&mod_ident, Arc::new(Object::Module(mod_env)))
+                .await;
+            Ok(Arc::new(Object::Null))
         } else if path
             .parent()
             .ok_or(EvalError::InvalidImport)?
