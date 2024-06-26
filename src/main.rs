@@ -1,18 +1,10 @@
-use std::{env, fs, path::Path, process::Command, sync::Arc};
+use std::{env, fs, process::Command, sync::Arc};
 
 use futures::lock::Mutex;
 use repl::run_repl;
-use scout_interpreter::{
-    env::{Env, EnvPointer},
-    eval,
-    object::Object,
-    ScrapeResultsPtr,
-};
+use scout_interpreter::{env::Env, eval, ScrapeResultsPtr};
 use scout_lexer::Lexer;
-use scout_parser::{
-    ast::{Identifier, NodeKind},
-    Parser,
-};
+use scout_parser::{ast::NodeKind, Parser};
 use serde::Deserialize;
 
 mod repl;
@@ -33,32 +25,12 @@ fn default_port() -> usize {
     4444
 }
 
-async fn load_std(
-    crawler: &fantoccini::Client,
-    results: ScrapeResultsPtr,
-) -> Result<EnvPointer, Box<dyn std::error::Error>> {
-    let env = Arc::new(Mutex::new(Env::default()));
-    let std_path = Path::new("./scout-lib/lib.sct");
-    let contents = fs::read_to_string(std_path)?;
-    let lex = Lexer::new(&contents);
-    let mut parser = Parser::new(lex);
-
-    let prgm = parser.parse_program().expect("failed to load std lib");
-    let _ = eval(NodeKind::Program(prgm), crawler, env.clone(), results).await;
-    Ok(env)
-}
-
 async fn run(
     file: Option<String>,
     crawler: &fantoccini::Client,
     results: ScrapeResultsPtr,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    // let std_env = load_std(crawler, results.clone()).await?;
-    // let std_mod = Object::Module(std_env);
-
     let env = Env::default();
-    // env.set(&Identifier::new("std".into()), Arc::new(std_mod))
-    //     .await;
     match file {
         None => run_repl(crawler, results, env).await,
         Some(f) => {

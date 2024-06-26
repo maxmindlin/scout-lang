@@ -1,7 +1,6 @@
 use std::collections::HashSet;
-use std::env::current_dir;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::thread::sleep;
 use std::time::Duration;
 use std::{collections::HashMap, sync::Arc};
@@ -10,7 +9,6 @@ use env::EnvPointer;
 use fantoccini::Locator;
 use futures::lock::Mutex;
 use futures::{future::BoxFuture, FutureExt};
-use import::ResolvedMod;
 use object::{obj_map_to_json, Object};
 use scout_lexer::{Lexer, TokenKind};
 use scout_parser::ast::{
