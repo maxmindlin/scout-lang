@@ -11,7 +11,7 @@ SCOUT_DIR = os.path.join(HOME, "scout-lang")
 if not os.path.exists(SCOUT_DIR):
     os.makedirs(SCOUT_DIR)
 else:
-    shutil.rmtree(os.path.join(SCOUT_DIR, "scout-std"))
+    shutil.rmtree(os.path.join(SCOUT_DIR, "scout-lib"))
 
 
 url = "https://api.github.com/repos/maxmindlin/scout-lang/releases/latest"
@@ -24,7 +24,7 @@ zip_resp = urllib.request.urlopen(zip_url)
 myzip = ZipFile(BytesIO(zip_resp.read()))
 
 std_to_replace = f"scout-lang-{version[1::]}/"
-std_file_start = std_to_replace + "scout-std/"
+std_file_start = std_to_replace + "scout-lib/"
 for file in myzip.infolist():
     if std_file_start in file.filename:
         replaced = file.filename.replace(std_to_replace, "")
