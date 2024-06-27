@@ -56,12 +56,14 @@ pub enum TokenKind {
     Where,
     And,
     Or,
+    While,
 }
 
 impl TokenKind {
     pub fn is_to_keyword(literal: &str) -> Option<Self> {
         use TokenKind::*;
         match literal {
+            "while" => Some(While),
             "where" => Some(Where),
             "for" => Some(For),
             "in" => Some(In),

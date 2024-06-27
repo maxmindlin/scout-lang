@@ -192,6 +192,7 @@ impl Parser {
             TokenKind::Goto => self.parse_goto_stmt(),
             TokenKind::Scrape => self.parse_scrape_stmt(),
             TokenKind::For => self.parse_for_loop(),
+            TokenKind::While => self.parse_while_loop(),
             TokenKind::Screenshot => self.parse_screenshot_stmt(),
             TokenKind::If => self.parse_if_else(),
             TokenKind::Ident => match self.peek.kind {
@@ -306,6 +307,15 @@ impl Parser {
         // let catch_b = self.parse_block(vec![TokenKind::End])?;
 
         Ok(StmtKind::TryCatch(try_b, catch_b))
+    }
+
+    fn parse_while_loop(&mut self) -> ParseResult<StmtKind> {
+        self.next_token();
+        let condition = self.parse_expr(Precedence::Lowest)?;
+        self.expect_peek(TokenKind::Do)?;
+        self.next_token();
+        let block = self.parse_block(vec![TokenKind::End])?;
+        Ok(StmtKind::WhileLoop(condition, block))
     }
 
     /// `for <ident> in <expr> do <block> end`
@@ -753,14 +763,14 @@ mod tests {
         StmtKind::Crawl(CrawlLiteral::new(None, None, Block::default())); "empty crawl stmtddddd"
     )]
     #[test_case(
-        "crawl link, depth where true do end",
+        "crawl link, depth where depth < 1 do end",
         StmtKind::Crawl(
             CrawlLiteral::new(
                 Some(CrawlBindings {
                     link: Identifier::new("link".into()),
                     depth: Identifier::new("depth".into())
                 }),
-                Some(ExprKind::Boolean(true)),
+                Some(ExprKind::Infix(Box::new(ExprKind::Ident(Identifier::new("depth".into()))), TokenKind::LT, Box::new(ExprKind::Number(1.)))),
                 Block::default()
             )
         ); "crawl stmt with bindings"
@@ -782,6 +792,21 @@ mod tests {
                 )
             )
         ); "db colon"
+    )]
+    #[test_case(
+        "while a < 1 do end",
+        StmtKind::WhileLoop(
+            ExprKind::Infix(
+                Box::new(
+                    ExprKind::Ident(Identifier::new("a".into()))
+                ),
+                TokenKind::LT,
+                Box::new(
+                    ExprKind::Number(1.)
+                )
+            ),
+            Block::default(),
+        ); "while loop"
     )]
     fn test_single_stmt(input: &str, exp: StmtKind) {
         let stmt = extract_first_stmt(input);

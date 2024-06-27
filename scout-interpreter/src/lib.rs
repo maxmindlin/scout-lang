@@ -78,6 +78,7 @@ pub enum EvalError {
     InvalidUrl,
     InvalidImport,
     InvalidIndex,
+    IndexOutOfBounds,
     NonFunction,
     UnknownIdent,
     UnknownPrefixOp,
@@ -189,6 +190,15 @@ fn eval_statement<'a>(
                 } else {
                     Err(EvalError::NonIterable)
                 }
+            }
+            StmtKind::WhileLoop(condition, block) => {
+                while eval_expression(condition, crawler, env.clone(), results.clone())
+                    .await?
+                    .is_truthy()
+                {
+                    check_return_eval!(block, crawler, env.clone(), results.clone());
+                }
+                Ok(Arc::new(Object::Null))
             }
             StmtKind::Assign(ident, expr) => {
                 let val = eval_expression(expr, crawler, env.clone(), results.clone()).await?;
@@ -774,6 +784,10 @@ fn eval_prefix(rhs: Arc<Object>, op: &TokenKind) -> EvalResult {
 fn eval_index(lhs: Arc<Object>, idx: Arc<Object>) -> EvalResult {
     match (&*lhs, &*idx) {
         (Object::List(a), Object::Number(b)) => Ok(a[*b as usize].clone()),
+        (Object::Str(a), Object::Number(b)) => match a.chars().nth(*b as usize) {
+            Some(c) => Ok(Arc::new(Object::Str(c.to_string()))),
+            None => Err(EvalError::IndexOutOfBounds),
+        },
         _ => Err(EvalError::InvalidIndex),
     }
 }

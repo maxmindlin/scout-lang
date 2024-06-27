@@ -20,6 +20,7 @@ pub enum StmtKind {
     Crawl(CrawlLiteral),
     Expr(ExprKind),
     ForLoop(ForLoop),
+    WhileLoop(ExprKind, Block),
     Func(FuncDef),
     Goto(ExprKind),
     IfElse(IfElseLiteral),

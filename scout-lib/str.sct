@@ -1,0 +1,32 @@
+def ltrim(s) do
+  i = 0
+  while is_whitespace(s[i]) and i < len(s) do
+    i = i + 1
+  end
+
+  out = ""
+  while i < len(s) do
+    out = out + s[i]
+    i = i + 1
+  end
+  out
+end
+
+def rtrim(s) do
+  i = len(s) - 1
+  while is_whitespace(s[i]) and i > 0 do
+    i = i - 1
+  end
+
+  out = ""
+  j = 0
+  while j <= i do
+    out = out + s[j]
+    j = j + 1
+  end
+  out
+end
+
+def trim(s) do
+  s |> ltrim() |> rtrim()
+end

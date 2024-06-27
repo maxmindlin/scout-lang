@@ -23,7 +23,6 @@ pub enum BuiltinKind {
     Print,
     TextContent,
     Href,
-    Trim,
     Click,
     Results,
     Len,
@@ -34,18 +33,20 @@ pub enum BuiltinKind {
     Number,
     Url,
     Sleep,
+    IsWhitespace,
+    List,
 }
 
 impl BuiltinKind {
     pub fn is_from(s: &str) -> Option<Self> {
         use BuiltinKind::*;
         match s {
+            "is_whitespace" => Some(IsWhitespace),
             "url" => Some(Url),
             "number" => Some(Number),
             "args" => Some(Args),
             "print" => Some(Print),
             "textContent" => Some(TextContent),
-            "trim" => Some(Trim),
             "href" => Some(Href),
             "click" => Some(Click),
             "results" => Some(Results),
@@ -55,6 +56,7 @@ impl BuiltinKind {
             "type" => Some(Type),
             "key_action" => Some(KeyPress),
             "sleep" => Some(Sleep),
+            "list" => Some(List),
             _ => None,
         }
     }
@@ -67,6 +69,23 @@ impl BuiltinKind {
     ) -> EvalResult {
         use BuiltinKind::*;
         match self {
+            List => {
+                assert_param_len!(args, 1);
+                if let Some(iterable) = args[0].into_iterable() {
+                    Ok(Arc::new(Object::List(iterable.into_iter().collect())))
+                } else {
+                    Err(EvalError::InvalidFnParams)
+                }
+            }
+            IsWhitespace => {
+                assert_param_len!(args, 1);
+                if let Object::Str(s) = &*args[0] {
+                    let is_whitespace = s.chars().all(|c| c.is_whitespace());
+                    Ok(Arc::new(Object::Boolean(is_whitespace)))
+                } else {
+                    Err(EvalError::InvalidFnParams)
+                }
+            }
             Sleep => {
                 assert_param_len!(args, 1);
                 if let Object::Number(ms) = &*args[0] {
@@ -141,14 +160,6 @@ impl BuiltinKind {
                 if let Object::Node(elem) = &*args[0] {
                     let _ = elem.click().await;
                     Ok(Arc::new(Object::Null))
-                } else {
-                    Err(EvalError::InvalidFnParams)
-                }
-            }
-            Trim => {
-                assert_param_len!(args, 1);
-                if let Object::Str(s) = &*args[0] {
-                    Ok(Arc::new(Object::Str(s.trim().to_owned())))
                 } else {
                     Err(EvalError::InvalidFnParams)
                 }
