@@ -37,10 +37,6 @@ fn resolve_std_file(ident: &Identifier) -> Result<PathBuf, EvalError> {
                 Err(_) => Err(EvalError::OSError),
             },
         }?;
-        // let root = env::var("SCOUT_PATH")
-        //     .or(env::var("HOME"))
-        //     .map_err(|_| EvalError::OSError)?;
-        // let home = env::var("HOME").map_err(|_| EvalError::OSError)?;
         let path = scout_dir.join("scout-lib").to_owned();
         Ok(path)
     } else {

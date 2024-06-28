@@ -147,7 +147,7 @@ impl Parser {
     }
 
     fn parse_stmt(&mut self) -> ParseResult<StmtKind> {
-        match self.curr.kind {
+        let lhs = match self.curr.kind {
             TokenKind::Def => {
                 self.expect_peek(TokenKind::Ident)?;
                 let ident = Identifier::new(self.curr.literal.clone());
@@ -197,11 +197,12 @@ impl Parser {
             TokenKind::If => self.parse_if_else(),
             TokenKind::Ident => match self.peek.kind {
                 TokenKind::Assign => {
-                    let ident = Identifier::new(self.curr.literal.clone());
+                    // let ident = Identifier::new(self.curr.literal.clone());
+                    let lhs = self.parse_expr(Precedence::Lowest)?;
                     self.next_token();
                     self.next_token();
                     let val = self.parse_expr(Precedence::Lowest)?;
-                    Ok(StmtKind::Assign(ident, val))
+                    Ok(StmtKind::Assign(lhs, val))
                 }
                 _ => self.parse_expr_stmt(),
             },
@@ -217,6 +218,16 @@ impl Parser {
             TokenKind::Try => self.parse_try_catch(),
             TokenKind::Crawl => self.parse_crawl(),
             _ => self.parse_expr_stmt(),
+        }?;
+
+        match (&lhs, self.peek.kind) {
+            (StmtKind::Expr(expr), TokenKind::Assign) => {
+                self.next_token();
+                self.next_token();
+                let rhs = self.parse_expr(Precedence::Lowest)?;
+                Ok(StmtKind::Assign(expr.clone(), rhs))
+            }
+            _ => Ok(lhs),
         }
     }
 
@@ -303,8 +314,6 @@ impl Parser {
         } else {
             None
         };
-        // self.next_token();
-        // let catch_b = self.parse_block(vec![TokenKind::End])?;
 
         Ok(StmtKind::TryCatch(try_b, catch_b))
     }
@@ -655,7 +664,7 @@ mod tests {
     #[test_case(
         r#"x = "a""#,
         StmtKind::Assign(
-            Identifier::new("x".into()),
+            ExprKind::Ident(Identifier::new("x".into())),
             ExprKind::Str("a".into())
         ); "single assign"
     )]
@@ -671,9 +680,24 @@ mod tests {
     #[test_case(
         r#"x = 1 == 2"#,
         StmtKind::Assign(
-            Identifier::new("x".to_string()),
+            ExprKind::Ident(Identifier::new("x".to_string())),
             ExprKind::Infix(Box::new(ExprKind::Number(1.)), TokenKind::EQ, Box::new(ExprKind::Number(2.)))
         ); "assign eq infix"
+    )]
+    #[test_case(
+        "a[0] = 1",
+        StmtKind::Assign(
+            ExprKind::Infix(
+                Box::new(
+                    ExprKind::Ident(Identifier::new("a".into()))
+                ),
+                TokenKind::LBracket,
+                Box::new(
+                    ExprKind::Number(0.)
+                )
+            ),
+            ExprKind::Number(1.)
+        ); "index assign"
     )]
     #[test_case(
         r#"f(a, b)"#,

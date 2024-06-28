@@ -1,3 +1,5 @@
+// Removes all whitespace characters
+// from the left start of a given string.
 def ltrim(s) do
   i = 0
   while is_whitespace(s[i]) and i < len(s) do
@@ -12,6 +14,8 @@ def ltrim(s) do
   out
 end
 
+// Removes all whitespace characters
+// from the right start of a given string.
 def rtrim(s) do
   i = len(s) - 1
   while is_whitespace(s[i]) and i > 0 do
@@ -27,6 +31,28 @@ def rtrim(s) do
   out
 end
 
+// Removes all whitespace characters
+// from the left and right of a given string.
 def trim(s) do
   s |> ltrim() |> rtrim()
+end
+
+// Splits a given string at some delimiter.
+// Returns a list of strings.
+def split(s, delim = " ") do
+  out = []
+  curr = ""
+  for c in s do
+    curr = curr + c
+    if c == delim do
+      push(out, curr)
+      curr = ""
+    end
+  end
+
+  if curr != "" do
+    push(out, curr)
+  end
+  
+  out
 end

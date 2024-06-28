@@ -5,7 +5,7 @@ use fantoccini::{
     elements::Element,
     key::Key,
 };
-use futures::{future::BoxFuture, FutureExt, TryFutureExt};
+use futures::{future::BoxFuture, lock::Mutex, FutureExt, TryFutureExt};
 
 use crate::{object::Object, EvalError, EvalResult, ScrapeResultsPtr};
 
@@ -35,6 +35,7 @@ pub enum BuiltinKind {
     Sleep,
     IsWhitespace,
     List,
+    Push,
 }
 
 impl BuiltinKind {
@@ -57,6 +58,7 @@ impl BuiltinKind {
             "key_action" => Some(KeyPress),
             "sleep" => Some(Sleep),
             "list" => Some(List),
+            "push" => Some(Push),
             _ => None,
         }
     }
@@ -69,10 +71,22 @@ impl BuiltinKind {
     ) -> EvalResult {
         use BuiltinKind::*;
         match self {
+            Push => {
+                assert_param_len!(args, 2);
+                match (&*args[0], args[1].clone()) {
+                    (Object::List(l), o @ _) => {
+                        l.lock().await.push(o.clone());
+                        Ok(Arc::new(Object::Null))
+                    }
+                    _ => Err(EvalError::InvalidFnParams),
+                }
+            }
             List => {
                 assert_param_len!(args, 1);
-                if let Some(iterable) = args[0].into_iterable() {
-                    Ok(Arc::new(Object::List(iterable.into_iter().collect())))
+                if let Some(iterable) = args[0].into_iterable().await {
+                    Ok(Arc::new(Object::List(Mutex::new(
+                        iterable.into_iter().collect(),
+                    ))))
                 } else {
                     Err(EvalError::InvalidFnParams)
                 }
@@ -121,7 +135,7 @@ impl BuiltinKind {
                 for idx in 1..env_args.len() {
                     out.push(Arc::new(Object::Str(env_args[idx].clone())));
                 }
-                Ok(Arc::new(Object::List(out)))
+                Ok(Arc::new(Object::List(Mutex::new(out))))
             }
             Type => {
                 assert_param_len!(args, 1);
@@ -129,7 +143,8 @@ impl BuiltinKind {
             }
             Print => {
                 for obj in args {
-                    println!("{obj}");
+                    let display = obj.to_display().await;
+                    println!("{display}");
                 }
                 Ok(Arc::new(Object::Null))
             }
@@ -172,7 +187,7 @@ impl BuiltinKind {
             Len => {
                 assert_param_len!(args, 1);
                 let len = match &*args[0] {
-                    Object::List(v) => Ok(v.len() as f64),
+                    Object::List(v) => Ok(v.lock().await.len() as f64),
                     Object::Str(s) => Ok(s.len() as f64),
                     _ => Err(EvalError::InvalidFnParams),
                 }?;
@@ -198,7 +213,7 @@ impl BuiltinKind {
                     (Object::Node(elem), Object::Str(s)) => {
                         elem.send_keys(s).map_err(EvalError::BrowserError).await?;
 
-                        if args.len() > 2 && args[2].is_truthy() {
+                        if args.len() > 2 && args[2].is_truthy().await {
                             let actions =
                                 KeyActions::new("enter".to_owned()).then(KeyAction::Down {
                                     value: Key::Return.into(),
@@ -221,7 +236,7 @@ impl BuiltinKind {
                         _ => Err(EvalError::InvalidFnParams),
                     },
                     Object::List(v) => {
-                        let contains = v.contains(&args[1]);
+                        let contains = v.lock().await.contains(&args[1]);
                         Ok(Arc::new(Object::Boolean(contains)))
                     }
                     _ => Err(EvalError::InvalidFnParams),
@@ -239,7 +254,8 @@ async fn apply_elem_fn(
         Object::Node(elem) => Ok(Arc::new(f(elem).await)),
         Object::List(list) => {
             let mut res = Vec::new();
-            for obj in list.iter() {
+            let inner = list.lock().await;
+            for obj in inner.iter() {
                 if let Object::Node(elem) = &*obj.clone() {
                     res.push(Arc::new(f(elem).await));
                 } else {
@@ -248,7 +264,7 @@ async fn apply_elem_fn(
                     ));
                 }
             }
-            Ok(Arc::new(Object::List(res)))
+            Ok(Arc::new(Object::List(Mutex::new(res))))
         }
         _ => Err(EvalError::InvalidFnParams),
     }

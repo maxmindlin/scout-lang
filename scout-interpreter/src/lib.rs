@@ -78,6 +78,7 @@ pub enum EvalError {
     InvalidUrl,
     InvalidImport,
     InvalidIndex,
+    InvalidAssign,
     IndexOutOfBounds,
     NonFunction,
     UnknownIdent,
@@ -90,6 +91,7 @@ pub enum EvalError {
     ScreenshotError,
     BrowserError(fantoccini::error::CmdError),
     OSError,
+    LockError,
 }
 
 pub async fn eval(
@@ -163,7 +165,7 @@ fn eval_statement<'a>(
                     res.insert(id.clone(), val);
                 }
                 results.lock().await.add_result(
-                    obj_map_to_json(&res),
+                    obj_map_to_json(&res).await,
                     crawler.current_url().await.unwrap().as_str(),
                 );
                 Ok(Arc::new(Object::Null))
@@ -174,7 +176,7 @@ fn eval_statement<'a>(
             StmtKind::ForLoop(floop) => {
                 let items =
                     eval_expression(&floop.iterable, crawler, env.clone(), results.clone()).await?;
-                if let Some(iterable) = items.into_iterable() {
+                if let Some(iterable) = items.into_iterable().await {
                     for obj in iterable.into_iter().collect::<Vec<Arc<Object>>>() {
                         let mut scope = Env::default();
                         scope.add_outer(env.clone()).await;
@@ -195,15 +197,41 @@ fn eval_statement<'a>(
                 while eval_expression(condition, crawler, env.clone(), results.clone())
                     .await?
                     .is_truthy()
+                    .await
                 {
                     check_return_eval!(block, crawler, env.clone(), results.clone());
                 }
                 Ok(Arc::new(Object::Null))
             }
-            StmtKind::Assign(ident, expr) => {
+            StmtKind::Assign(lhs, expr) => {
                 let val = eval_expression(expr, crawler, env.clone(), results.clone()).await?;
-                env.lock().await.set(ident, val).await;
-                Ok(Arc::new(Object::Null))
+                match lhs {
+                    ExprKind::Infix(lhs, TokenKind::LBracket, rhs) => {
+                        let r_obj =
+                            eval_expression(&rhs, crawler, env.clone(), results.clone()).await?;
+                        let l_obj =
+                            &*eval_expression(&lhs, crawler, env.clone(), results.clone()).await?;
+
+                        match (&*l_obj, &*r_obj) {
+                            (Object::List(v), Object::Number(idx)) => {
+                                let mut inner = v.lock().await;
+                                let idx = *idx as usize;
+                                if idx < inner.len() {
+                                    (*inner)[idx] = val.clone();
+                                } else {
+                                    return Err(EvalError::IndexOutOfBounds);
+                                }
+                                Ok(Arc::new(Object::Null))
+                            }
+                            _ => Err(EvalError::InvalidIndex),
+                        }
+                    }
+                    ExprKind::Ident(ident) => {
+                        env.lock().await.set(ident, val).await;
+                        Ok(Arc::new(Object::Null))
+                    }
+                    _ => Err(EvalError::InvalidAssign),
+                }
             }
             StmtKind::Screenshot(path) => {
                 let png = crawler.screenshot().await?;
@@ -222,13 +250,14 @@ fn eval_statement<'a>(
             }) => {
                 let truth_check =
                     eval_expression(&if_lit.cond, crawler, env.clone(), results.clone()).await?;
-                if truth_check.is_truthy() {
+                if truth_check.is_truthy().await {
                     check_return_eval!(&if_lit.block, crawler, env.clone(), results.clone());
                 } else {
                     for elif in elifs {
                         if eval_expression(&elif.cond, crawler, env.clone(), results.clone())
                             .await?
                             .is_truthy()
+                            .await
                         {
                             check_return_eval!(&elif.block, crawler, env.clone(), results.clone());
                             return Ok(Arc::new(Object::Null));
@@ -443,7 +472,7 @@ fn eval_crawl<'a>(
                             let obj =
                                 eval_expression(expr, crawler, new_env.clone(), results.clone())
                                     .await?;
-                            truth_check = obj.is_truthy();
+                            truth_check = obj.is_truthy().await;
                         }
                         if !visited.contains(&link) && truth_check {
                             let new_tab = crawler.new_window(true).await?;
@@ -649,7 +678,7 @@ fn eval_expression<'a>(
                                 .iter()
                                 .map(|e| Arc::new(Object::Node(e.clone())))
                                 .collect();
-                            Ok(Arc::new(Object::List(elems)))
+                            Ok(Arc::new(Object::List(Mutex::new(elems))))
                         }
                         Err(_) => Ok(Arc::new(Object::Null)),
                     },
@@ -663,7 +692,7 @@ fn eval_expression<'a>(
                             .iter()
                             .map(|e| Arc::new(Object::Node(e.clone())))
                             .collect();
-                        Ok(Arc::new(Object::List(elems)))
+                        Ok(Arc::new(Object::List(Mutex::new(elems))))
                     }
                     Err(_) => Ok(Arc::new(Object::Null)),
                 },
@@ -713,11 +742,11 @@ fn eval_expression<'a>(
                     list_content.push(obj);
                 }
 
-                Ok(Arc::new(Object::List(list_content)))
+                Ok(Arc::new(Object::List(Mutex::new(list_content))))
             }
             ExprKind::Prefix(rhs, op) => {
                 let r_obj = eval_expression(rhs, crawler, env.clone(), results.clone()).await?;
-                let res = eval_prefix(r_obj, op)?;
+                let res = eval_prefix(r_obj, op).await?;
                 Ok(res)
             }
         }
@@ -743,12 +772,12 @@ async fn eval_infix(
         },
         _ => {
             let rhs_obj = eval_expression(rhs, crawler, env.clone(), results.clone()).await?;
-            eval_infix_op(lhs, op, rhs_obj)
+            eval_infix_op(lhs, op, rhs_obj).await
         }
     }
 }
 
-fn eval_infix_op(lhs: Arc<Object>, op: &TokenKind, rhs: Arc<Object>) -> EvalResult {
+async fn eval_infix_op(lhs: Arc<Object>, op: &TokenKind, rhs: Arc<Object>) -> EvalResult {
     match op {
         TokenKind::EQ => Ok(Arc::new(Object::Boolean(lhs == rhs))),
         TokenKind::NEQ => Ok(Arc::new(Object::Boolean(lhs != rhs))),
@@ -756,34 +785,42 @@ fn eval_infix_op(lhs: Arc<Object>, op: &TokenKind, rhs: Arc<Object>) -> EvalResu
         TokenKind::Minus => eval_minus_op(lhs, rhs),
         TokenKind::Asterisk => eval_asterisk_op(lhs, rhs),
         TokenKind::Slash => eval_slash_op(lhs, rhs),
-        TokenKind::LBracket => eval_index(lhs, rhs),
+        TokenKind::LBracket => eval_index(lhs, rhs).await,
         TokenKind::GT => eval_gt_op(lhs, rhs),
         TokenKind::LT => eval_lt_op(lhs, rhs),
         TokenKind::GTE => eval_gte_op(lhs, rhs),
         TokenKind::LTE => eval_lte_op(lhs, rhs),
         TokenKind::And => Ok(Arc::new(Object::Boolean(
-            lhs.is_truthy() && rhs.is_truthy(),
+            lhs.is_truthy().await && rhs.is_truthy().await,
         ))),
         TokenKind::Or => Ok(Arc::new(Object::Boolean(
-            lhs.is_truthy() || rhs.is_truthy(),
+            lhs.is_truthy().await || rhs.is_truthy().await,
         ))),
         _ => Err(EvalError::UnknownInfixOp),
     }
 }
 
-fn eval_prefix(rhs: Arc<Object>, op: &TokenKind) -> EvalResult {
+async fn eval_prefix(rhs: Arc<Object>, op: &TokenKind) -> EvalResult {
     match (&*rhs, op) {
         (_, TokenKind::Bang) => {
-            let truth = !rhs.is_truthy();
+            let truth = !rhs.is_truthy().await;
             Ok(Arc::new(Object::Boolean(truth)))
         }
         _ => Err(EvalError::UnknownPrefixOp),
     }
 }
 
-fn eval_index(lhs: Arc<Object>, idx: Arc<Object>) -> EvalResult {
+async fn eval_index(lhs: Arc<Object>, idx: Arc<Object>) -> EvalResult {
     match (&*lhs, &*idx) {
-        (Object::List(a), Object::Number(b)) => Ok(a[*b as usize].clone()),
+        (Object::List(a), Object::Number(b)) => {
+            let idx = *b as usize;
+            let inner = a.lock().await;
+            if idx < inner.len() {
+                Ok(inner[idx].clone())
+            } else {
+                Err(EvalError::IndexOutOfBounds)
+            }
+        }
         (Object::Str(a), Object::Number(b)) => match a.chars().nth(*b as usize) {
             Some(c) => Ok(Arc::new(Object::Str(c.to_string()))),
             None => Err(EvalError::IndexOutOfBounds),

@@ -16,7 +16,7 @@ pub struct Program {
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum StmtKind {
-    Assign(Identifier, ExprKind),
+    Assign(ExprKind, ExprKind),
     Crawl(CrawlLiteral),
     Expr(ExprKind),
     ForLoop(ForLoop),

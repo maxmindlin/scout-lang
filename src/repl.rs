@@ -37,7 +37,7 @@ pub async fn run_repl(
                         )
                         .await;
                         match obj {
-                            Ok(o) => println!("{}", o),
+                            Ok(o) => println!("{}", o.to_display().await),
                             Err(e) => println!("Interpeter error: {:?}", e),
                         };
                         //pprint(Arc::into_inner(obj).unwrap());
