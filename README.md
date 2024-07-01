@@ -32,7 +32,11 @@ Eventually Scout installation will come bundled with the necessary pre-reqs. For
 - Some version of FireFox
 - [Geckodriver](https://github.com/mozilla/geckodriver)
 
-See [Releases](https://github.com/maxmindlin/scout-lang/releases) for up to date Scout binary installation instructions.
+Run the installer:
+
+```bash
+curl --proto '=https' --tlsv1.2 -LsSf https://raw.githubusercontent.com/maxmindlin/scout-lang/main/scripts/installer.py | python3
+```
 
 # Usage
 
