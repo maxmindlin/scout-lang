@@ -337,8 +337,6 @@ impl Parser {
         self.expect_peek(TokenKind::Do)?;
         self.next_token();
         let block = self.parse_block(vec![TokenKind::End])?;
-
-        self.next_token();
         let floop = ForLoop::new(ident, iterable, block);
         Ok(StmtKind::ForLoop(floop))
     }

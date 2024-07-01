@@ -56,7 +56,7 @@ impl Object {
         }
     }
 
-    pub fn to_display<'a>(&'a self) -> BoxFuture<'a, String> {
+    pub fn to_display(&self) -> BoxFuture<String> {
         use Object::*;
         async move {
             match self {
@@ -81,7 +81,7 @@ impl Object {
                             out.push_str(", ");
                         }
                     }
-                    out.push_str("]");
+                    out.push(']');
 
                     out
                 }
@@ -178,9 +178,9 @@ impl Object {
     }
 }
 
-pub fn obj_map_to_json<'a>(
-    map: &'a HashMap<Identifier, Arc<Object>>,
-) -> BoxFuture<'a, serde_json::Map<String, Value>> {
+pub fn obj_map_to_json(
+    map: &HashMap<Identifier, Arc<Object>>,
+) -> BoxFuture<serde_json::Map<String, Value>> {
     async move {
         let mut out = serde_json::Map::new();
         for (ident, obj) in map.iter() {

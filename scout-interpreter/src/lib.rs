@@ -14,7 +14,7 @@ use scout_lexer::{Lexer, TokenKind};
 use scout_parser::ast::{
     Block, CrawlLiteral, ExprKind, Identifier, IfElseLiteral, NodeKind, Program, StmtKind,
 };
-use scout_parser::Parser;
+use scout_parser::{ParseError, Parser};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
 
@@ -68,6 +68,13 @@ impl ScrapeResults {
     }
 }
 
+#[derive(Debug)]
+pub enum ImportError {
+    ParseError(ParseError),
+    PathError,
+    UnknownModule,
+}
+
 // TODO add parameters for better debugging.
 #[derive(Debug)]
 pub enum EvalError {
@@ -76,7 +83,7 @@ pub enum EvalError {
     InvalidFnParams,
     InvalidExpr,
     InvalidUrl,
-    InvalidImport,
+    InvalidImport(ImportError),
     InvalidIndex,
     InvalidAssign,
     IndexOutOfBounds,
@@ -208,11 +215,11 @@ fn eval_statement<'a>(
                 match lhs {
                     ExprKind::Infix(lhs, TokenKind::LBracket, rhs) => {
                         let r_obj =
-                            eval_expression(&rhs, crawler, env.clone(), results.clone()).await?;
+                            eval_expression(rhs, crawler, env.clone(), results.clone()).await?;
                         let l_obj =
-                            &*eval_expression(&lhs, crawler, env.clone(), results.clone()).await?;
+                            &*eval_expression(lhs, crawler, env.clone(), results.clone()).await?;
 
-                        match (&*l_obj, &*r_obj) {
+                        match (l_obj, &*r_obj) {
                             (Object::List(v), Object::Number(idx)) => {
                                 let mut inner = v.lock().await;
                                 let idx = *idx as usize;
@@ -315,7 +322,7 @@ fn eval_use_chain<'a>(
             match parser.parse_program() {
                 Ok(prgm) => {
                     let module_env = Arc::new(Mutex::new(Env::default()));
-                    let _ = eval(
+                    eval(
                         NodeKind::Program(prgm),
                         crawler,
                         module_env.clone(),
@@ -328,15 +335,15 @@ fn eval_use_chain<'a>(
                         .await;
                     Ok(Arc::new(Object::Null))
                 }
-                Err(_) => Err(EvalError::InvalidImport),
+                Err(e) => Err(EvalError::InvalidImport(ImportError::ParseError(e))),
             }
         } else if path.is_dir() {
             // Loop through every member of the directory and import them to an environment
             let dir_name_raw = path
                 .file_name()
-                .ok_or(EvalError::InvalidImport)?
+                .ok_or(EvalError::InvalidImport(ImportError::PathError))?
                 .to_str()
-                .ok_or(EvalError::InvalidImport)?
+                .ok_or(EvalError::InvalidImport(ImportError::PathError))?
                 .to_string();
             let dir_name = if &dir_name_raw == "scout-lib" {
                 String::from("std")
@@ -349,9 +356,9 @@ fn eval_use_chain<'a>(
                     let filename = entry
                         .path()
                         .file_stem()
-                        .ok_or(EvalError::InvalidImport)?
+                        .ok_or(EvalError::InvalidImport(ImportError::PathError))?
                         .to_str()
-                        .ok_or(EvalError::InvalidImport)?
+                        .ok_or(EvalError::InvalidImport(ImportError::PathError))?
                         .to_string();
                     let sub_ident = Identifier::new(filename);
                     let p = entry.path();
@@ -372,7 +379,7 @@ fn eval_use_chain<'a>(
             Ok(Arc::new(Object::Null))
         } else if path
             .parent()
-            .ok_or(EvalError::InvalidImport)?
+            .ok_or(EvalError::InvalidImport(ImportError::PathError))?
             .with_extension("sct")
             .exists()
         {
@@ -380,9 +387,9 @@ fn eval_use_chain<'a>(
             let parent_module_path = path.parent().unwrap();
             let parent_module = parent_module_path
                 .file_name()
-                .ok_or(EvalError::InvalidImport)?
+                .ok_or(EvalError::InvalidImport(ImportError::PathError))?
                 .to_str()
-                .ok_or(EvalError::InvalidImport)?
+                .ok_or(EvalError::InvalidImport(ImportError::PathError))?
                 .to_string();
             let parent_ident = Identifier::new(parent_module);
             let mb_obj = env.lock().await.get(&parent_ident).await;
@@ -393,9 +400,9 @@ fn eval_use_chain<'a>(
                     Object::Module(mod_env) => {
                         let final_name = path
                             .file_name()
-                            .ok_or(EvalError::InvalidImport)?
+                            .ok_or(EvalError::InvalidImport(ImportError::PathError))?
                             .to_str()
-                            .ok_or(EvalError::InvalidImport)?
+                            .ok_or(EvalError::InvalidImport(ImportError::PathError))?
                             .to_string();
                         let final_ident = Identifier::new(final_name);
                         let obj_exists = mod_env.lock().await.get(&final_ident).await;
@@ -403,10 +410,10 @@ fn eval_use_chain<'a>(
                             env.lock().await.set(&final_ident, obj.clone()).await;
                             Ok(Arc::new(Object::Null))
                         } else {
-                            Err(EvalError::InvalidImport)
+                            Err(EvalError::InvalidImport(ImportError::UnknownModule))
                         }
                     }
-                    _ => Err(EvalError::InvalidImport),
+                    _ => Err(EvalError::InvalidImport(ImportError::UnknownModule)),
                 },
                 None => {
                     // load the parent module, then load the specific object
@@ -423,7 +430,7 @@ fn eval_use_chain<'a>(
                 }
             }
         } else {
-            Err(EvalError::InvalidImport)
+            Err(EvalError::InvalidImport(ImportError::UnknownModule))
         }
     }
     .boxed()

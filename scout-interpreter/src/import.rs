@@ -6,7 +6,7 @@ use std::{
 use scout_lexer::TokenKind;
 use scout_parser::ast::{ExprKind, Identifier};
 
-use crate::EvalError;
+use crate::{EvalError, ImportError};
 
 #[derive(Debug)]
 pub struct ResolvedMod {
@@ -19,9 +19,9 @@ pub fn resolve_module(module: &ExprKind) -> Result<ResolvedMod, EvalError> {
         ExprKind::Ident(ident) => Ok(ident.clone()),
         ExprKind::Infix(_, _, rhs) => match rhs.as_ref() {
             ExprKind::Ident(ident) => Ok(ident.clone()),
-            _ => Err(EvalError::InvalidImport),
+            _ => Err(EvalError::InvalidImport(ImportError::UnknownModule)),
         },
-        _ => Err(EvalError::InvalidImport),
+        _ => Err(EvalError::InvalidImport(ImportError::UnknownModule)),
     }?;
     let buf = resolve_module_file(module)?;
     let filepath = convert_path_buf(buf)?;
@@ -45,7 +45,10 @@ fn resolve_std_file(ident: &Identifier) -> Result<PathBuf, EvalError> {
 }
 
 fn convert_path_buf(buf: PathBuf) -> Result<String, EvalError> {
-    let res = buf.to_str().ok_or(EvalError::InvalidImport)?.to_owned();
+    let res = buf
+        .to_str()
+        .ok_or(EvalError::InvalidImport(ImportError::PathError))?
+        .to_owned();
     Ok(res)
 }
 
@@ -62,8 +65,8 @@ fn resolve_module_file(module: &ExprKind) -> Result<PathBuf, EvalError> {
                 let buf = base.join(&file.name);
                 Ok(buf)
             }
-            _ => Err(EvalError::InvalidImport),
+            _ => Err(EvalError::InvalidImport(ImportError::UnknownModule)),
         },
-        _ => Err(EvalError::InvalidImport),
+        _ => Err(EvalError::InvalidImport(ImportError::UnknownModule)),
     }
 }

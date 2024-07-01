@@ -43,16 +43,17 @@ def split(s, delim = " ") do
   out = []
   curr = ""
   for c in s do
-    curr = curr + c
     if c == delim do
       push(out, curr)
       curr = ""
+    else
+      curr = curr + c
     end
   end
 
   if curr != "" do
     push(out, curr)
   end
-  
+
   out
 end

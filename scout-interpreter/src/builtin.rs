@@ -74,7 +74,7 @@ impl BuiltinKind {
             Push => {
                 assert_param_len!(args, 2);
                 match (&*args[0], args[1].clone()) {
-                    (Object::List(l), o @ _) => {
+                    (Object::List(l), o) => {
                         l.lock().await.push(o.clone());
                         Ok(Arc::new(Object::Null))
                     }
