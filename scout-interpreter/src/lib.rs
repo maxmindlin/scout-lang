@@ -88,7 +88,7 @@ pub enum EvalError {
     InvalidAssign,
     IndexOutOfBounds,
     NonFunction,
-    UnknownIdent,
+    UnknownIdent(Identifier),
     UnknownPrefixOp,
     UnknownInfixOp,
     UncaughtException,
@@ -619,7 +619,7 @@ fn apply_call<'a>(
             // Not user defined, check if its a builtin
             None => match BuiltinKind::is_from(&ident.name) {
                 Some(builtin) => builtin.apply(crawler, results.clone(), obj_params).await,
-                None => Err(EvalError::UnknownIdent),
+                None => Err(EvalError::UnknownIdent(ident.clone())),
             },
         }
     }
@@ -665,7 +665,7 @@ fn eval_expression<'a>(
                         Err(_) => Ok(Arc::new(Object::Null)),
                     },
                     Some(_) => Err(EvalError::InvalidUsage("Cannot select non-node".into())),
-                    None => Err(EvalError::UnknownIdent),
+                    None => Err(EvalError::UnknownIdent(ident.clone())),
                 },
                 None => match crawler.find(Locator::Css(selector)).await {
                     Ok(node) => {
@@ -690,7 +690,7 @@ fn eval_expression<'a>(
                         Err(_) => Ok(Arc::new(Object::Null)),
                     },
                     Some(_) => Err(EvalError::InvalidUsage("cannot select non-node".into())),
-                    None => Err(EvalError::UnknownIdent),
+                    None => Err(EvalError::UnknownIdent(ident.clone())),
                 },
                 None => match crawler.find_all(Locator::Css(selector)).await {
                     Ok(nodes) => {
@@ -711,7 +711,7 @@ fn eval_expression<'a>(
             }
             ExprKind::Ident(ident) => match env.lock().await.get(ident).await {
                 Some(obj) => Ok(obj.clone()),
-                None => Err(EvalError::UnknownIdent),
+                None => Err(EvalError::UnknownIdent(ident.clone())),
             },
             ExprKind::Chain(exprs) => {
                 let mut prev: Option<Arc<Object>> = None;
