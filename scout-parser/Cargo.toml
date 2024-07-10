@@ -20,4 +20,4 @@ keywords = [
 scout-lexer = { version = "0.5.1", path = "../scout-lexer/" }
 
 [dev-dependencies]
-test-case = "*"
+test-case = "3.3.1"

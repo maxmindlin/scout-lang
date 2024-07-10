@@ -19,4 +19,4 @@ keywords = [
 [dependencies]
 
 [dev-dependencies]
-test-case = "*"
+test-case = "3.3.1"
