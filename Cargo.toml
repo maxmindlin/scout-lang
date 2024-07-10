@@ -27,7 +27,7 @@ path = "src/main.rs"
 
 [package]
 name = "scoutlang"
-version = "0.5.2"
+version = "0.5.3"
 edition = "2021"
 repository = "https://github.com/maxmindlin/scout-lang"
 description = "A web crawling programming language"
@@ -45,9 +45,9 @@ keywords = [
 
 [dependencies]
 futures = "0.3.30"
-scout-interpreter = { version = "0.5.1", path = "./scout-interpreter/" }
-scout-lexer = { version = "0.5.1", path = "./scout-lexer/" }
-scout-parser = { version = "0.5.1", path = "./scout-parser/" }
+scout-interpreter = { version = "0.5.3", path = "./scout-interpreter/" }
+scout-lexer = { version = "0.5.3", path = "./scout-lexer/" }
+scout-parser = { version = "0.5.3", path = "./scout-parser/" }
 rustyline = "8.0.0"
 colored = "2"
 fantoccini = { version = "0.19.3", features = ["rustls-tls"] }
