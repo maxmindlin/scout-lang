@@ -34,11 +34,21 @@ Eventually Scout installation will come bundled with the necessary pre-reqs. For
 - Some version of FireFox
 - [Geckodriver](https://github.com/mozilla/geckodriver)
 
-Run the installer:
+The binary can then be installed one of two ways:
+
+1. Cargo (requires Rust)
+
+```sh
+cargo install scoutlang
+```
+
+2. Run the installer (requires Python3):
 
 ```bash
 curl --proto '=https' --tlsv1.2 -LsSf https://raw.githubusercontent.com/maxmindlin/scout-lang/main/scripts/installer.py | python3
 ```
+
+Both install the Scout intepreter into your path as `scout`.
 
 # Usage
 
