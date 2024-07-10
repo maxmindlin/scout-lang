@@ -31,9 +31,9 @@ repository = "https://github.com/maxmindlin/scout-lang"
 
 [dependencies]
 futures = "0.3.30"
-scout-interpreter = { path = "./scout-interpreter/" }
-scout-lexer = { path = "./scout-lexer/" }
-scout-parser = { path = "./scout-parser/" }
+scout-interpreter = { version = "0.5.1", path = "./scout-interpreter/" }
+scout-lexer = { version = "0.5.1", path = "./scout-lexer/" }
+scout-parser = { version = "0.5.1", path = "./scout-parser/" }
 rustyline = "8.0.0"
 colored = "2"
 fantoccini = "0.19.3"
