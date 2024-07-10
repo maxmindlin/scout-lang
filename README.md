@@ -48,7 +48,7 @@ cargo install scoutlang
 curl --proto '=https' --tlsv1.2 -LsSf https://raw.githubusercontent.com/maxmindlin/scout-lang/main/scripts/installer.py | python3
 ```
 
-Both install the Scout intepreter into your path as `scout`.
+Both install the Scout interpreter into your path as `scout`.
 
 # Usage
 
