@@ -21,6 +21,10 @@ pr-run-mode = "plan"
 # Whether to install an updater program
 install-updater = false
 
+[[bin]]
+name = "scout"
+path = "src/main.rs"
+
 [package]
 name = "scoutlang"
 version = "0.5.1"
