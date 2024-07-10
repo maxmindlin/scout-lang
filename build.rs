@@ -1,4 +1,3 @@
-use core::panic;
 use std::path::Path;
 use std::{env, fs, io};
 
@@ -23,7 +22,10 @@ fn main() {
         Ok(s) => Path::new(&s).to_path_buf(),
         Err(_) => match env::var("HOME") {
             Ok(s) => Path::new(&s).join("scout-lang"),
-            Err(_) => panic!("Unable to find $HOME or $SCOUT_PATH. Please set one."),
+            Err(_) => {
+                println!("HOME or SCOUT_PATH not found. Skipping std lib install");
+                return;
+            }
         },
     };
     let path = scout_dir.join("scout-lib").to_owned();
