@@ -5,6 +5,14 @@ edition = "2021"
 repository = "https://github.com/maxmindlin/scout-lang"
 description = "A web crawling programming language"
 homepage = "https://scout-lang.netlify.app"
+license = "MIT OR Apache-2.0"
+keywords = [
+  "programming-language",
+  "web-crawling",
+  "web-scraping",
+  "crawling",
+  "scraping",
+]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
