@@ -50,7 +50,7 @@ scout-lexer = { version = "0.5.1", path = "./scout-lexer/" }
 scout-parser = { version = "0.5.1", path = "./scout-parser/" }
 rustyline = "8.0.0"
 colored = "2"
-fantoccini = "0.19.3"
+fantoccini = { version = "0.19.3", features = ["rustls-tls"] }
 tokio = { version = "1", features = ["full"] }
 serde_json = "1.0"
 envy = "0.4.2"
