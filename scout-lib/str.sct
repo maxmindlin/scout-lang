@@ -2,7 +2,7 @@
 // from the left start of a given string.
 def ltrim(s) do
   i = 0
-  while is_whitespace(s[i]) and i < len(s) do
+  while isWhitespace(s[i]) and i < len(s) do
     i = i + 1
   end
 
@@ -18,7 +18,7 @@ end
 // from the right start of a given string.
 def rtrim(s) do
   i = len(s) - 1
-  while is_whitespace(s[i]) and i > 0 do
+  while isWhitespace(s[i]) and i > 0 do
     i = i - 1
   end
 

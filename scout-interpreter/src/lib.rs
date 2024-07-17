@@ -91,6 +91,7 @@ pub enum EvalError {
     UnknownIdent(Identifier),
     UnknownPrefixOp,
     UnknownInfixOp,
+    UnknownKey(Identifier),
     UncaughtException,
     URLParseError(String),
     DuplicateDeclare,
@@ -228,6 +229,12 @@ fn eval_statement<'a>(
                                 } else {
                                     return Err(EvalError::IndexOutOfBounds);
                                 }
+                                Ok(Arc::new(Object::Null))
+                            }
+                            (Object::Map(m), Object::Str(s)) => {
+                                let mut inner = m.lock().await;
+                                let ident = Identifier::new(s.clone());
+                                inner.insert(ident, val);
                                 Ok(Arc::new(Object::Null))
                             }
                             _ => Err(EvalError::InvalidIndex),
@@ -706,6 +713,17 @@ fn eval_expression<'a>(
             },
             ExprKind::Str(s) => Ok(Arc::new(Object::Str(s.to_owned()))),
             ExprKind::Number(n) => Ok(Arc::new(Object::Number(*n))),
+            ExprKind::Map(map) => {
+                let mut out = HashMap::new();
+
+                for (key, val) in map.pairs.iter() {
+                    let obj_val =
+                        eval_expression(val, crawler, env.clone(), results.clone()).await?;
+                    out.insert(key.clone(), obj_val);
+                }
+
+                Ok(Arc::new(Object::Map(Mutex::new(out))))
+            }
             ExprKind::Call(ident, params) => {
                 apply_call(ident, params, crawler, None, env.clone(), results.clone()).await
             }
@@ -786,8 +804,8 @@ async fn eval_infix(
 
 async fn eval_infix_op(lhs: Arc<Object>, op: &TokenKind, rhs: Arc<Object>) -> EvalResult {
     match op {
-        TokenKind::EQ => Ok(Arc::new(Object::Boolean(lhs == rhs))),
-        TokenKind::NEQ => Ok(Arc::new(Object::Boolean(lhs != rhs))),
+        TokenKind::EQ => Ok(Arc::new(Object::Boolean(lhs.eq(&rhs).await))),
+        TokenKind::NEQ => Ok(Arc::new(Object::Boolean(!lhs.eq(&rhs).await))),
         TokenKind::Plus => eval_plus_op(lhs, rhs),
         TokenKind::Minus => eval_minus_op(lhs, rhs),
         TokenKind::Asterisk => eval_asterisk_op(lhs, rhs),
@@ -826,6 +844,15 @@ async fn eval_index(lhs: Arc<Object>, idx: Arc<Object>) -> EvalResult {
                 Ok(inner[idx].clone())
             } else {
                 Err(EvalError::IndexOutOfBounds)
+            }
+        }
+        (Object::Map(m), Object::Str(s)) => {
+            let inner = m.lock().await;
+            let ident = Identifier::new(s.clone());
+            let mb_val = inner.get(&ident);
+            match mb_val {
+                Some(val) => Ok(val.clone()),
+                None => Err(EvalError::UnknownIdent(ident)),
             }
         }
         (Object::Str(a), Object::Number(b)) => match a.chars().nth(*b as usize) {

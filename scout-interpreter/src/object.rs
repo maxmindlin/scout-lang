@@ -9,7 +9,7 @@ use crate::env::EnvPointer;
 #[derive(Debug)]
 pub enum Object {
     Null,
-    Map(HashMap<Identifier, Arc<Object>>),
+    Map(Mutex<HashMap<Identifier, Arc<Object>>>),
     Str(String),
     Node(fantoccini::elements::Element),
     List(Mutex<Vec<Arc<Object>>>),
@@ -62,11 +62,15 @@ impl Object {
             match self {
                 Null => "Null".into(),
                 Map(hash) => {
-                    let mut out = "{{".to_string();
-                    for (i, o) in hash.iter() {
-                        out.push_str(&format!("{}: {} ", i, o));
+                    let inner = hash.lock().await;
+                    let mut out = "{ ".to_string();
+                    for (idx, (i, o)) in inner.iter().enumerate() {
+                        out.push_str(&format!("{}: {}", i, o));
+                        if idx != inner.len() - 1 {
+                            out.push_str(", ");
+                        }
                     }
-                    out.push_str("}}");
+                    out.push_str(" }");
                     out
                 }
                 Str(s) => format!("\"{}\"", s),
@@ -92,23 +96,52 @@ impl Object {
         }
         .boxed()
     }
-}
 
-impl PartialEq for Object {
-    fn eq(&self, other: &Self) -> bool {
-        use Object::*;
-        match (self, other) {
-            (Null, Null) => true,
-            (Map(a), Map(b)) => a == b,
-            (Str(a), Str(b)) => a == b,
-            // @TODO: check if this is even correct
-            (Node(a), Node(b)) => a.element_id() == b.element_id(),
-            // @TODO: this requires async awaits....
-            (List(_a), List(_b)) => false,
-            (Boolean(a), Boolean(b)) => a == b,
-            (Number(a), Number(b)) => a == b,
-            _ => false,
+    pub fn eq<'a>(&'a self, other: &'a Self) -> BoxFuture<'a, bool> {
+        async move {
+            use Object::*;
+            match (self, other) {
+                (Null, Null) => true,
+                (Map(a), Map(b)) => {
+                    let a_i = a.lock().await;
+                    let b_i = b.lock().await;
+                    for key in a_i.keys() {
+                        match b_i.get(key) {
+                            Some(obj) => {
+                                if !a_i.get(key).unwrap().eq(obj).await {
+                                    return false;
+                                }
+                            }
+                            None => return false,
+                        }
+                    }
+                    true
+                }
+                (Str(a), Str(b)) => a == b,
+                // @TODO: check if this is even correct
+                (Node(a), Node(b)) => a.element_id() == b.element_id(),
+                (List(a), List(b)) => {
+                    let a_i = a.lock().await;
+                    let b_i = b.lock().await;
+
+                    if a_i.len() != b_i.len() {
+                        return false;
+                    }
+
+                    for idx in 0..(a_i.len() - 1) {
+                        if !a_i[idx].eq(&b_i[idx]).await {
+                            return false;
+                        }
+                    }
+
+                    true
+                }
+                (Boolean(a), Boolean(b)) => a == b,
+                (Number(a), Number(b)) => a == b,
+                _ => false,
+            }
         }
+        .boxed()
     }
 }
 
@@ -117,13 +150,6 @@ impl Display for Object {
         use Object::*;
         match self {
             Null => write!(f, "Null"),
-            Map(hash) => {
-                write!(f, "{{")?;
-                for (i, o) in hash.iter() {
-                    write!(f, "{}: {} ", i, o)?;
-                }
-                write!(f, "}}")
-            }
             Str(s) => write!(f, "\"{}\"", s),
             Node(_) => write!(f, "Node"),
             List(_objs) => write!(f, "list"),
@@ -155,7 +181,10 @@ impl Object {
             // @TODO handle this better
             Node(_) => Value::String("Node".to_owned()),
             List(list) => self.vec_to_json(list).await,
-            Map(map) => Value::Object(obj_map_to_json(map).await),
+            Map(map) => {
+                let inner = map.lock().await;
+                Value::Object(obj_map_to_json(&*inner).await)
+            }
             Boolean(b) => Value::Bool(*b),
             Number(n) => json!(n),
             Fn(_, _) => panic!("cant serialize func"),
@@ -168,7 +197,7 @@ impl Object {
         match self {
             Null => false,
             Str(s) => !s.is_empty(),
-            Map(m) => !m.is_empty(),
+            Map(m) => !m.lock().await.is_empty(),
             List(v) => !v.lock().await.is_empty(),
             Boolean(b) => *b,
             // @TODO: Idk what truthiness of floats should be

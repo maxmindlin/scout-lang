@@ -61,6 +61,7 @@ fn map_prefix_fn(kind: &TokenKind) -> Option<PrefixParseFn> {
         Str => Some(Parser::parse_str_literal),
         Null => Some(Parser::parse_null),
         LBracket => Some(Parser::parse_list_literal),
+        LBrace => Some(Parser::parse_map),
         SelectAll => Some(Parser::parse_select_all),
         Select => Some(Parser::parse_select),
         Bang => Some(Parser::parse_prefix),
@@ -393,6 +394,11 @@ impl Parser {
         }
         self.next_token();
         Ok(HashLiteral { pairs })
+    }
+
+    fn parse_map(&mut self) -> ParseResult<ExprKind> {
+        let lit = self.parse_hash_literal()?;
+        Ok(ExprKind::Map(lit))
     }
 
     fn parse_number_literal(&mut self) -> ParseResult<ExprKind> {

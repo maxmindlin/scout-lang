@@ -1,11 +1,14 @@
-use std::{env, sync::Arc, thread::sleep, time::Duration};
+use std::{collections::HashMap, env, sync::Arc, thread::sleep, time::Duration};
 
 use fantoccini::{
     actions::{InputSource, KeyAction, KeyActions},
+    client,
+    cookies::Cookie,
     elements::Element,
     key::Key,
 };
 use futures::{future::BoxFuture, lock::Mutex, FutureExt, TryFutureExt};
+use scout_parser::ast::Identifier;
 
 use crate::{object::Object, EvalError, EvalResult, ScrapeResultsPtr};
 
@@ -36,13 +39,15 @@ pub enum BuiltinKind {
     IsWhitespace,
     List,
     Push,
+    Cookies,
+    SetCookies,
 }
 
 impl BuiltinKind {
     pub fn is_from(s: &str) -> Option<Self> {
         use BuiltinKind::*;
         match s {
-            "is_whitespace" => Some(IsWhitespace),
+            "isWhitespace" => Some(IsWhitespace),
             "url" => Some(Url),
             "number" => Some(Number),
             "args" => Some(Args),
@@ -55,10 +60,12 @@ impl BuiltinKind {
             "input" => Some(Input),
             "contains" => Some(Contains),
             "type" => Some(Type),
-            "key_action" => Some(KeyPress),
+            "keyAction" => Some(KeyPress),
             "sleep" => Some(Sleep),
             "list" => Some(List),
             "push" => Some(Push),
+            "cookies" => Some(Cookies),
+            "setCookies" => Some(SetCookies),
             _ => None,
         }
     }
@@ -71,6 +78,36 @@ impl BuiltinKind {
     ) -> EvalResult {
         use BuiltinKind::*;
         match self {
+            Cookies => {
+                let cookies = crawler
+                    .get_all_cookies()
+                    .await?
+                    .iter()
+                    .map(|c| {
+                        (
+                            Identifier::new(c.name().to_string()),
+                            Arc::new(Object::Str(c.value().to_string())),
+                        )
+                    })
+                    .collect::<HashMap<Identifier, Arc<Object>>>();
+
+                Ok(Arc::new(Object::Map(Mutex::new(cookies))))
+            }
+            SetCookies => {
+                assert_param_len!(args, 1);
+                if let Object::Map(m) = &*args[0] {
+                    let inner = m.lock().await;
+                    crawler.delete_all_cookies().await?;
+                    for (key, val) in inner.iter() {
+                        let cookie = Cookie::new(key.name.clone(), val.to_string());
+                        crawler.add_cookie(cookie).await?;
+                    }
+
+                    Ok(Arc::new(Object::Null))
+                } else {
+                    Err(EvalError::InvalidFnParams)
+                }
+            }
             Push => {
                 assert_param_len!(args, 2);
                 match (&*args[0], args[1].clone()) {
@@ -236,7 +273,14 @@ impl BuiltinKind {
                         _ => Err(EvalError::InvalidFnParams),
                     },
                     Object::List(v) => {
-                        let contains = v.lock().await.contains(&args[1]);
+                        let inner = v.lock().await;
+                        let mut contains = false;
+                        for obj in inner.iter() {
+                            if obj.eq(&args[1]).await {
+                                contains = true;
+                                break;
+                            }
+                        }
                         Ok(Arc::new(Object::Boolean(contains)))
                     }
                     _ => Err(EvalError::InvalidFnParams),

@@ -39,6 +39,7 @@ pub enum ExprKind {
     Boolean(bool),
     Ident(Identifier),
     List(Vec<ExprKind>),
+    Map(HashLiteral),
     Null,
 
     // Selects
