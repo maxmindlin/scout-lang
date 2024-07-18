@@ -1,0 +1,11 @@
+def get(url, headers = null) do
+    httpRequest("GET", url, null, headers)
+end
+
+def post(url, body = null, headers = null) do
+    httpRequest("POST", url, body, headers)
+end
+
+def put(url, body = null, headers = null) do
+    httpRequest("PUT", url, body, headers)
+end

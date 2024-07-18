@@ -143,35 +143,6 @@ impl Object {
         }
         .boxed()
     }
-}
-
-impl Display for Object {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        use Object::*;
-        match self {
-            Null => write!(f, "Null"),
-            Str(s) => write!(f, "\"{}\"", s),
-            Node(_) => write!(f, "Node"),
-            List(_objs) => write!(f, "list"),
-            Boolean(b) => write!(f, "{}", b),
-            Number(n) => write!(f, "{}", n),
-            _ => write!(f, "object"),
-        }
-    }
-}
-
-impl Object {
-    fn vec_to_json<'a>(&'a self, v: &'a Mutex<Vec<Arc<Object>>>) -> BoxFuture<'a, Value> {
-        async move {
-            let mut out = Vec::new();
-            let inner = v.lock().await;
-            for obj in &*inner {
-                out.push(obj.clone().to_json().await);
-            }
-            Value::Array(out)
-        }
-        .boxed()
-    }
 
     pub async fn to_json(&self) -> Value {
         use Object::*;
@@ -180,7 +151,7 @@ impl Object {
             Str(s) => Value::String(s.to_owned()),
             // @TODO handle this better
             Node(_) => Value::String("Node".to_owned()),
-            List(list) => self.vec_to_json(list).await,
+            List(list) => vec_to_json(list).await,
             Map(map) => {
                 let inner = map.lock().await;
                 Value::Object(obj_map_to_json(&*inner).await)
@@ -205,6 +176,33 @@ impl Object {
             _ => true,
         }
     }
+}
+
+impl Display for Object {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        use Object::*;
+        match self {
+            Null => write!(f, "Null"),
+            Str(s) => write!(f, "\"{}\"", s),
+            Node(_) => write!(f, "Node"),
+            List(_objs) => write!(f, "list"),
+            Boolean(b) => write!(f, "{}", b),
+            Number(n) => write!(f, "{}", n),
+            _ => write!(f, "object"),
+        }
+    }
+}
+
+fn vec_to_json<'a>(v: &'a Mutex<Vec<Arc<Object>>>) -> BoxFuture<'a, Value> {
+    async move {
+        let mut out = Vec::new();
+        let inner = v.lock().await;
+        for obj in &*inner {
+            out.push(obj.clone().to_json().await);
+        }
+        Value::Array(out)
+    }
+    .boxed()
 }
 
 pub fn obj_map_to_json(

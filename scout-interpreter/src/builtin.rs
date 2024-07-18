@@ -1,13 +1,16 @@
-use std::{collections::HashMap, env, sync::Arc, thread::sleep, time::Duration};
+use std::{collections::HashMap, env, str::FromStr, sync::Arc, thread::sleep, time::Duration};
 
 use fantoccini::{
     actions::{InputSource, KeyAction, KeyActions},
-    client,
     cookies::Cookie,
     elements::Element,
     key::Key,
 };
 use futures::{future::BoxFuture, lock::Mutex, FutureExt, TryFutureExt};
+use reqwest::{
+    header::{HeaderMap, HeaderName, HeaderValue},
+    Method,
+};
 use scout_parser::ast::Identifier;
 
 use crate::{object::Object, EvalError, EvalResult, ScrapeResultsPtr};
@@ -41,6 +44,8 @@ pub enum BuiltinKind {
     Push,
     Cookies,
     SetCookies,
+    ToJson,
+    HttpRequest,
 }
 
 impl BuiltinKind {
@@ -66,6 +71,8 @@ impl BuiltinKind {
             "push" => Some(Push),
             "cookies" => Some(Cookies),
             "setCookies" => Some(SetCookies),
+            "toJson" => Some(ToJson),
+            "httpRequest" => Some(HttpRequest),
             _ => None,
         }
     }
@@ -78,6 +85,55 @@ impl BuiltinKind {
     ) -> EvalResult {
         use BuiltinKind::*;
         match self {
+            HttpRequest => {
+                if args.len() < 4 {
+                    return Err(EvalError::InvalidFnParams);
+                }
+
+                match (&*args[0], &*args[1]) {
+                    (Object::Str(method), Object::Str(url)) => {
+                        let client = reqwest::Client::new();
+                        let method = Method::from_str(method)
+                            .map_err(|_| EvalError::InvalidHTTPMethod(method.to_string()))?;
+                        let mut req_builder = client.request(method, url);
+
+                        // Check for an optional body
+                        if args[2].is_truthy().await {
+                            let body = args[2].to_string();
+                            req_builder = req_builder.body(body);
+                        }
+
+                        // Check for an optional headers map
+                        if let Object::Map(map) = &*args[3] {
+                            let mut headers = HeaderMap::default();
+                            let inner = map.lock().await;
+                            for (k, v) in inner.iter() {
+                                headers.insert(
+                                    HeaderName::try_from(k.name.clone()).map_err(|_| {
+                                        EvalError::InvalidHTTPHeaderKey(k.name.clone())
+                                    })?,
+                                    HeaderValue::from_str(&v.to_string()).map_err(|_| {
+                                        EvalError::InvalidHTTPHeaderValue(v.to_string())
+                                    })?,
+                                );
+                            }
+                            req_builder = req_builder.headers(headers);
+                        }
+                        let res = req_builder.send().await?;
+                        let kvs = vec![(
+                            Identifier::new("statusCode".to_string()),
+                            Arc::new(Object::Number(res.status().as_u16() as f64)),
+                        )];
+                        Ok(Arc::new(Object::Map(Mutex::new(kvs.into_iter().collect()))))
+                    }
+                    _ => Err(EvalError::InvalidFnParams),
+                }
+            }
+            ToJson => {
+                assert_param_len!(args, 1);
+                let json = args[0].to_json().await;
+                Ok(Arc::new(Object::Str(json.to_string())))
+            }
             Cookies => {
                 let cookies = crawler
                     .get_all_cookies()
@@ -283,6 +339,16 @@ impl BuiltinKind {
                         }
                         Ok(Arc::new(Object::Boolean(contains)))
                     }
+                    Object::Map(m) => {
+                        if let Object::Str(id) = &*args[1] {
+                            let ident = Identifier::new(id.clone());
+                            let inner = m.lock().await;
+                            let contains = inner.contains_key(&ident);
+                            Ok(Arc::new(Object::Boolean(contains)))
+                        } else {
+                            Err(EvalError::InvalidFnParams)
+                        }
+                    }
                     _ => Err(EvalError::InvalidFnParams),
                 }
             }
@@ -311,5 +377,11 @@ async fn apply_elem_fn(
             Ok(Arc::new(Object::List(Mutex::new(res))))
         }
         _ => Err(EvalError::InvalidFnParams),
+    }
+}
+
+impl From<reqwest::Error> for EvalError {
+    fn from(value: reqwest::Error) -> Self {
+        EvalError::HTTPError(value)
     }
 }
