@@ -12,8 +12,12 @@ use reqwest::{
     Method,
 };
 use scout_parser::ast::Identifier;
+use serde_json::Value;
 
-use crate::{object::Object, EvalError, EvalResult, ScrapeResultsPtr};
+use crate::{
+    object::{json_to_obj, Object},
+    EvalError, EvalResult, ScrapeResultsPtr,
+};
 
 macro_rules! assert_param_len {
     ($arg:expr, $len:expr) => {
@@ -86,7 +90,7 @@ impl BuiltinKind {
         use BuiltinKind::*;
         match self {
             HttpRequest => {
-                if args.len() < 4 {
+                if args.len() < 5 {
                     return Err(EvalError::InvalidFnParams);
                 }
 
@@ -120,10 +124,26 @@ impl BuiltinKind {
                             req_builder = req_builder.headers(headers);
                         }
                         let res = req_builder.send().await?;
-                        let kvs = vec![(
-                            Identifier::new("statusCode".to_string()),
-                            Arc::new(Object::Number(res.status().as_u16() as f64)),
-                        )];
+                        let status = Object::Number(res.status().as_u16() as f64);
+                        let url = Object::Str(res.url().to_string());
+                        let mut content = Arc::new(Object::Null);
+                        if let Object::Str(s) = &*args[4] {
+                            match s.as_str() {
+                                "json" => {
+                                    let json = res.json::<Value>().await?;
+                                    content = json_to_obj(&json);
+                                }
+                                "text" => {
+                                    content = Arc::new(Object::Str(res.text().await?));
+                                }
+                                _ => return Err(EvalError::InvalidFnParams),
+                            }
+                        }
+                        let kvs = vec![
+                            (Identifier::new("statusCode".to_string()), Arc::new(status)),
+                            (Identifier::new("url".to_string()), Arc::new(url)),
+                            (Identifier::new("content".to_string()), content),
+                        ];
                         Ok(Arc::new(Object::Map(Mutex::new(kvs.into_iter().collect()))))
                     }
                     _ => Err(EvalError::InvalidFnParams),

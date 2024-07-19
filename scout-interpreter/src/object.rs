@@ -154,7 +154,7 @@ impl Object {
             List(list) => vec_to_json(list).await,
             Map(map) => {
                 let inner = map.lock().await;
-                Value::Object(obj_map_to_json(&*inner).await)
+                Value::Object(obj_map_to_json(&inner).await)
             }
             Boolean(b) => Value::Bool(*b),
             Number(n) => json!(n),
@@ -193,7 +193,7 @@ impl Display for Object {
     }
 }
 
-fn vec_to_json<'a>(v: &'a Mutex<Vec<Arc<Object>>>) -> BoxFuture<'a, Value> {
+fn vec_to_json(v: &Mutex<Vec<Arc<Object>>>) -> BoxFuture<'_, Value> {
     async move {
         let mut out = Vec::new();
         let inner = v.lock().await;
@@ -216,4 +216,25 @@ pub fn obj_map_to_json(
         out
     }
     .boxed()
+}
+
+pub fn json_to_obj(json: &Value) -> Arc<Object> {
+    match json {
+        Value::Null => Arc::new(Object::Null),
+        Value::Bool(b) => Arc::new(Object::Boolean(*b)),
+        Value::String(s) => Arc::new(Object::Str(s.clone())),
+        Value::Array(vals) => Arc::new(Object::List(Mutex::new(
+            vals.iter().map(json_to_obj).collect(),
+        ))),
+        Value::Object(in_map) => {
+            let mut map = HashMap::new();
+            for (k, v) in in_map.iter() {
+                let ident = Identifier::new(k.clone());
+                let val = json_to_obj(v);
+                map.insert(ident, val);
+            }
+            Arc::new(Object::Map(Mutex::new(map)))
+        }
+        Value::Number(n) => Arc::new(Object::Number(n.as_f64().unwrap_or(f64::NAN))),
+    }
 }

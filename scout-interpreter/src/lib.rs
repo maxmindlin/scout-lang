@@ -89,6 +89,7 @@ pub enum EvalError {
     InvalidHTTPMethod(String),
     InvalidHTTPHeaderKey(String),
     InvalidHTTPHeaderValue(String),
+    InvalidJSONValue(serde_json::Value),
     HTTPError(reqwest::Error),
     IndexOutOfBounds,
     NonFunction,

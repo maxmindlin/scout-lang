@@ -1,11 +1,12 @@
-def get(url, headers = null) do
-    httpRequest("GET", url, null, headers)
+def get(url, headers = null, body = "text") do
+    httpRequest("GET", url, null, headers, body)
 end
 
-def post(url, body = null, headers = null) do
-    httpRequest("POST", url, body, headers)
+def post(url, body = null, headers = null, body = "text") do
+    httpRequest("POST", url, body, headers, body)
 end
 
-def put(url, body = null, headers = null) do
-    httpRequest("PUT", url, body, headers)
+def put(url, body = null, headers = null, body = "text") do
+    httpRequest("PUT", url, body, headers, body)
 end
+
