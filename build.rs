@@ -20,7 +20,7 @@ fn main() {
     println!("cargo::rerun-if-changed=scout-lib/");
     let scout_dir = match env::var("SCOUT_PATH") {
         Ok(s) => Path::new(&s).to_path_buf(),
-        Err(_) => match env::var("HOME") {
+        Err(_) => match env::var("HOME").or_else(|_| env::var("USERPROFILE")) {
             Ok(s) => Path::new(&s).join("scout-lang"),
             Err(_) => {
                 println!("HOME or SCOUT_PATH not found. Skipping std lib install");

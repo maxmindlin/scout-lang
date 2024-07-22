@@ -32,9 +32,9 @@ fn resolve_std_file(ident: &Identifier) -> Result<PathBuf, EvalError> {
     if *ident == Identifier::new("std".into()) {
         let scout_dir = match env::var("SCOUT_PATH") {
             Ok(s) => Ok(Path::new(&s).to_path_buf()),
-            Err(_) => match env::var("HOME") {
+            Err(_) => match env::var("HOME").or_else(|_| env::var("USERPROFILE")) {
                 Ok(s) => Ok(Path::new(&s).join("scout-lang")),
-                Err(_) => Err(EvalError::OSError),
+                Err(e) => Err(EvalError::OSError(e.to_string())),
             },
         }?;
         let path = scout_dir.join("scout-lib").to_owned();

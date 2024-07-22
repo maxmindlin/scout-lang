@@ -104,7 +104,7 @@ pub enum EvalError {
     NonIterable,
     ScreenshotError,
     BrowserError(fantoccini::error::CmdError),
-    OSError,
+    OSError(String),
     LockError,
 }
 
@@ -303,7 +303,7 @@ fn eval_statement<'a>(
             StmtKind::Use(import) => {
                 let resolved = resolve_module(import)?;
                 let path = std::env::current_dir()
-                    .map_err(|_| EvalError::OSError)?
+                    .map_err(|e| EvalError::OSError(e.to_string()))?
                     .join(&resolved.filepath);
                 eval_use_chain(path, &resolved.ident, crawler, env.clone(), results.clone()).await
             }
@@ -328,8 +328,8 @@ fn eval_use_chain<'a>(
 ) -> BoxFuture<'a, EvalResult> {
     async move {
         if path.with_extension("sct").exists() {
-            let content =
-                fs::read_to_string(path.with_extension("sct")).map_err(|_| EvalError::OSError)?;
+            let content = fs::read_to_string(path.with_extension("sct"))
+                .map_err(|e| EvalError::OSError(e.to_string()))?;
             let lex = Lexer::new(&content);
             let mut parser = Parser::new(lex);
             match parser.parse_program() {

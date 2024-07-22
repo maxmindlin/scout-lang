@@ -65,7 +65,7 @@ impl Object {
                     let inner = hash.lock().await;
                     let mut out = "{ ".to_string();
                     for (idx, (i, o)) in inner.iter().enumerate() {
-                        out.push_str(&format!("{}: {}", i, o));
+                        out.push_str(&format!("{}: {}", i, o.to_display().await));
                         if idx != inner.len() - 1 {
                             out.push_str(", ");
                         }
