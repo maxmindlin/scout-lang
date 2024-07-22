@@ -539,14 +539,50 @@ impl Parser {
         }
 
         self.next_token();
-        let expr = self.parse_expr(Precedence::Lowest)?;
-        args.push(expr);
+        if TokenKind::Ident == self.curr.kind {
+            match self.peek.kind {
+                TokenKind::Assign => {
+                    let ident = Identifier::new(self.curr.literal.clone());
+                    self.next_token();
+                    self.next_token();
+                    let expr = self.parse_expr(Precedence::Lowest)?;
+                    let kwarg = Kwarg { ident, expr };
+                    kwargs.push(kwarg);
+                }
+                _ => {
+                    let expr = self.parse_expr(Precedence::Lowest)?;
+                    args.push(expr);
+                }
+            }
+        } else {
+            let expr = self.parse_expr(Precedence::Lowest)?;
+            args.push(expr);
+        }
 
         while self.peek.kind == TokenKind::Comma {
             self.next_token();
             self.next_token();
-            let e = self.parse_expr(Precedence::Lowest)?;
-            args.push(e);
+            if TokenKind::Ident == self.curr.kind {
+                match self.peek.kind {
+                    TokenKind::Assign => {
+                        let ident = Identifier::new(self.curr.literal.clone());
+                        self.next_token();
+                        self.next_token();
+                        let expr = self.parse_expr(Precedence::Lowest)?;
+                        let kwarg = Kwarg { ident, expr };
+                        kwargs.push(kwarg);
+                    }
+                    _ => {
+                        let expr = self.parse_expr(Precedence::Lowest)?;
+                        args.push(expr);
+                    }
+                }
+            } else {
+                let expr = self.parse_expr(Precedence::Lowest)?;
+                args.push(expr);
+            }
+            // let e = self.parse_expr(Precedence::Lowest)?;
+            // args.push(e);
         }
 
         self.expect_peek(end)?;
@@ -730,6 +766,43 @@ mod tests {
                 }
             )
         ); "fn call with multi params"
+    )]
+    #[test_case(
+        r#"f(a, b = 1)"#,
+        StmtKind::Expr(
+            ExprKind::Call(
+                CallLiteral {
+                    ident: Identifier::new("f".into()),
+                    args: vec![
+                        ExprKind::Ident(Identifier::new("a".into()))
+                    ],
+                    kwargs: vec![
+                        Kwarg {
+                            ident: Identifier::new("b".into()),
+                            expr: ExprKind::Number(1.),
+                        }
+                    ]
+                }
+            )
+        ); "fn call with kwarg & arg"
+    )]
+    #[test_case(
+        r#"f(b = 1)"#,
+        StmtKind::Expr(
+            ExprKind::Call(
+                CallLiteral {
+                    ident: Identifier::new("f".into()),
+                    args: vec![
+                    ],
+                    kwargs: vec![
+                        Kwarg {
+                            ident: Identifier::new("b".into()),
+                            expr: ExprKind::Number(1.),
+                        }
+                    ]
+                }
+            )
+        ); "fn call with kwarg"
     )]
     #[test_case(
         r#"def f() do end"#,

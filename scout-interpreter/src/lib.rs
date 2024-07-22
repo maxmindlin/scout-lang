@@ -12,7 +12,8 @@ use futures::{future::BoxFuture, FutureExt};
 use object::{obj_map_to_json, Object};
 use scout_lexer::{Lexer, TokenKind};
 use scout_parser::ast::{
-    Block, CrawlLiteral, ExprKind, Identifier, IfElseLiteral, NodeKind, Program, StmtKind,
+    Block, CallLiteral, CrawlLiteral, ExprKind, Identifier, IfElseLiteral, Kwarg, NodeKind,
+    Program, StmtKind,
 };
 use scout_parser::{ParseError, Parser};
 use serde::{Deserialize, Serialize};
@@ -564,7 +565,8 @@ async fn eval_block(
 
 fn apply_call<'a>(
     ident: &'a Identifier,
-    params: &'a [ExprKind],
+    args: &'a [ExprKind],
+    kwargs: &'a [Kwarg],
     crawler: &'a fantoccini::Client,
     prev: Option<Arc<Object>>,
     env: EnvPointer,
@@ -573,7 +575,7 @@ fn apply_call<'a>(
     async move {
         // Evaluate the provided fn inputs
         let mut obj_params = Vec::new();
-        for param in params.iter() {
+        for param in args.iter() {
             let expr = eval_expression(param, crawler, env.clone(), results.clone()).await?;
             obj_params.push(expr);
         }
@@ -616,6 +618,13 @@ fn apply_call<'a>(
                                 }
                             },
                         }
+                    }
+
+                    for kwarg in kwargs.iter() {
+                        let val =
+                            eval_expression(&kwarg.expr, crawler, env.clone(), results.clone())
+                                .await?;
+                        scope.set(&kwarg.ident, val).await;
                     }
 
                     let ev =
@@ -729,8 +738,21 @@ fn eval_expression<'a>(
 
                 Ok(Arc::new(Object::Map(Mutex::new(out))))
             }
-            ExprKind::Call(ident, params) => {
-                apply_call(ident, params, crawler, None, env.clone(), results.clone()).await
+            ExprKind::Call(CallLiteral {
+                ident,
+                args,
+                kwargs,
+            }) => {
+                apply_call(
+                    ident,
+                    args,
+                    kwargs,
+                    crawler,
+                    None,
+                    env.clone(),
+                    results.clone(),
+                )
+                .await
             }
             ExprKind::Ident(ident) => match env.lock().await.get(ident).await {
                 Some(obj) => Ok(obj.clone()),
@@ -740,9 +762,21 @@ fn eval_expression<'a>(
                 let mut prev: Option<Arc<Object>> = None;
                 for expr in exprs {
                     let eval = match expr {
-                        ExprKind::Call(ident, params) => {
-                            apply_call(ident, params, crawler, prev, env.clone(), results.clone())
-                                .await?
+                        ExprKind::Call(CallLiteral {
+                            ident,
+                            args,
+                            kwargs,
+                        }) => {
+                            apply_call(
+                                ident,
+                                args,
+                                kwargs,
+                                crawler,
+                                prev,
+                                env.clone(),
+                                results.clone(),
+                            )
+                            .await?
                         }
                         _ => eval_expression(expr, crawler, env.clone(), results.clone()).await?,
                     };
