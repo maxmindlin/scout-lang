@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 use ast::{
-    CrawlBindings, CrawlLiteral, ExprKind, FnParam, ForLoop, FuncDef, HashLiteral, Identifier,
-    IfElseLiteral, IfLiteral, Program, StmtKind,
+    CallLiteral, CrawlBindings, CrawlLiteral, ExprKind, FnParam, ForLoop, FuncDef, HashLiteral,
+    Identifier, IfElseLiteral, IfLiteral, Kwarg, Program, StmtKind,
 };
 use scout_lexer::{Lexer, Token, TokenKind};
 
@@ -530,11 +530,12 @@ impl Parser {
         Ok(ExprKind::Chain(exprs))
     }
 
-    fn parse_expr_list(&mut self, end: TokenKind) -> ParseResult<Vec<ExprKind>> {
+    fn parse_call_args(&mut self, end: TokenKind) -> ParseResult<(Vec<ExprKind>, Vec<Kwarg>)> {
         let mut args: Vec<ExprKind> = Vec::new();
+        let mut kwargs: Vec<Kwarg> = Vec::new();
         if self.peek.kind == end {
             self.next_token();
-            return Ok(args);
+            return Ok((args, kwargs));
         }
 
         self.next_token();
@@ -549,14 +550,18 @@ impl Parser {
         }
 
         self.expect_peek(end)?;
-        Ok(args)
+        Ok((args, kwargs))
     }
 
     fn parse_call_expr(&mut self, func: ExprKind) -> ParseResult<ExprKind> {
         match func {
             ExprKind::Ident(ident) => {
-                let args = self.parse_expr_list(TokenKind::RParen)?;
-                Ok(ExprKind::Call(ident, args))
+                let (args, kwargs) = self.parse_call_args(TokenKind::RParen)?;
+                Ok(ExprKind::Call(CallLiteral {
+                    ident,
+                    args,
+                    kwargs,
+                }))
             }
             _ => Err(ParseError::InvalidFnCall),
         }
@@ -565,6 +570,8 @@ impl Parser {
 
 #[cfg(test)]
 mod tests {
+    use self::ast::CallLiteral;
+
     use super::*;
     use test_case::test_case;
 
@@ -624,8 +631,11 @@ mod tests {
                     (
                         Identifier::new("a".into()),
                         ExprKind::Call(
-                            Identifier::new("fn".into()),
-                            vec![ExprKind::Str("a".into())]
+                            CallLiteral {
+                                ident: Identifier::new("fn".into()),
+                                args: vec![ExprKind::Str("a".into())],
+                                kwargs: vec![]
+                            }
                         )
                     )
                 ]
@@ -642,8 +652,11 @@ mod tests {
                         ExprKind::Chain(vec![
                             ExprKind::Select("b".into(), None),
                             ExprKind::Call(
-                                Identifier::new("fn".into()),
-                                vec![ExprKind::Str("a".into())]
+                                CallLiteral {
+                                    ident: Identifier::new("fn".into()),
+                                    args: vec![ExprKind::Str("a".into())],
+                                    kwargs: vec![]
+                                }
                             )
                         ])
                     )
@@ -707,11 +720,14 @@ mod tests {
         r#"f(a, b)"#,
         StmtKind::Expr(
             ExprKind::Call(
-                Identifier::new("f".into()),
-                vec![
-                    ExprKind::Ident(Identifier::new("a".into())),
-                    ExprKind::Ident(Identifier::new("b".into()))
-                ]
+                CallLiteral {
+                    ident: Identifier::new("f".into()),
+                    args: vec![
+                        ExprKind::Ident(Identifier::new("a".into())),
+                        ExprKind::Ident(Identifier::new("b".into()))
+                    ],
+                    kwargs: vec![]
+                }
             )
         ); "fn call with multi params"
     )]
