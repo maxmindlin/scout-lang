@@ -47,10 +47,23 @@ pub enum ExprKind {
     SelectAll(String, Option<Identifier>),
 
     // Rest
-    Call(Identifier, Vec<ExprKind>),
+    Call(CallLiteral),
     Chain(Vec<ExprKind>),
     Infix(Box<ExprKind>, TokenKind, Box<ExprKind>),
     Prefix(Box<ExprKind>, TokenKind),
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct CallLiteral {
+    pub ident: Identifier,
+    pub args: Vec<ExprKind>,
+    pub kwargs: Vec<Kwarg>,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct Kwarg {
+    pub ident: Identifier,
+    pub expr: ExprKind,
 }
 
 #[derive(Debug, PartialEq, Clone)]
