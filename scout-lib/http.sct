@@ -1,12 +1,19 @@
-def get(url, headers = null, body = "text") do
-    httpRequest("GET", url, null, headers, body)
+def get(url, headers = null, response = "text") do
+    httpRequest("GET", url, null, headers, response)
 end
 
-def post(url, body = null, headers = null, body = "text") do
-    httpRequest("POST", url, body, headers, body)
+def post(url, body = null, headers = null, response = "text") do
+    httpRequest("POST", url, body, headers, response)
 end
 
-def put(url, body = null, headers = null, body = "text") do
-    httpRequest("PUT", url, body, headers, body)
+def put(url, body = null, headers = null, response = "text") do
+    httpRequest("PUT", url, body, headers, response)
 end
 
+def patch(url, body = null, headers = null, response = "text") do
+    httpRequest("PATCH", url, body, headers, response)
+end
+
+def delete(url, body = null, headers = null, response = "text") do
+    httpRequest("DELETE", url, body, headers, response)
+end
