@@ -6,10 +6,10 @@
 <a href="https://github.com/maxmindlin/scout-lang/releases/latest" style="text-decoration: none;">
     <img alt="GitHub Release" src="https://img.shields.io/github/v/release/maxmindlin/scout-lang?style=for-the-badge">
 </a>
-<a href="https://crates.io/crates/scoutlang">
+<a href="https://crates.io/crates/scoutlang" style="text-decoration: none;">
     <img alt="Crates.io Version" src="https://img.shields.io/crates/v/scoutlang?style=for-the-badge">
 </a>
-<a href="https://hub.docker.com/r/mmindlin/scout">
+<a href="https://hub.docker.com/r/mmindlin/scout" style="text-decoration: none;">
     <img alt="Docker version" src="https://img.shields.io/docker/v/mmindlin/scout?style=for-the-badge&logo=docker&color=blue">
 </a>
 </div>
