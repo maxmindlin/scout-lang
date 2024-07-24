@@ -3,9 +3,15 @@
 <p style="font-size:0.5em;color:#d4d4d4">A Web Crawling Programming Language</p>
 <img alt="GitHub Actions Workflow Status" src="https://img.shields.io/badge/license-MIT%2FApache-blue.svg?style=for-the-badge&label=License">
 <img alt="GitHub Actions Workflow Status" src="https://img.shields.io/github/actions/workflow/status/maxmindlin/scout-lang/ci.yml?style=for-the-badge&label=CI">
-<img alt="GitHub Release" src="https://img.shields.io/github/v/release/maxmindlin/scout-lang?style=for-the-badge">
-<img alt="Crates.io Version" src="https://img.shields.io/crates/v/scoutlang?style=for-the-badge">
-<img alt="Docker version" src="https://img.shields.io/docker/v/mmindlin/scout?style=for-the-badge&logo=docker&color=blue">
+<a href="https://github.com/maxmindlin/scout-lang/releases/latest">
+    <img alt="GitHub Release" src="https://img.shields.io/github/v/release/maxmindlin/scout-lang?style=for-the-badge">
+</a>
+<a href="https://crates.io/crates/scoutlang">
+    <img alt="Crates.io Version" src="https://img.shields.io/crates/v/scoutlang?style=for-the-badge">
+</a>
+<a href="https://hub.docker.com/r/mmindlin/scout">
+    <img alt="Docker version" src="https://img.shields.io/docker/v/mmindlin/scout?style=for-the-badge&logo=docker&color=blue">
+</a>
 </div>
 <hr>
 <br>
