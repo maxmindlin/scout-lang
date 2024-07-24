@@ -1,12 +1,9 @@
 <div align="center">
-<style>
-a {text-decoration: none;}
-</style>
 <img src="./assets/scout-logo.png" width="400">
 <p style="font-size:0.5em;color:#d4d4d4">A Web Crawling Programming Language</p>
 <img alt="GitHub Actions Workflow Status" src="https://img.shields.io/badge/license-MIT%2FApache-blue.svg?style=for-the-badge&label=License">
 <img alt="GitHub Actions Workflow Status" src="https://img.shields.io/github/actions/workflow/status/maxmindlin/scout-lang/ci.yml?style=for-the-badge&label=CI">
-<a href="https://github.com/maxmindlin/scout-lang/releases/latest">
+<a href="https://github.com/maxmindlin/scout-lang/releases/latest" style="text-decoration: none;">
     <img alt="GitHub Release" src="https://img.shields.io/github/v/release/maxmindlin/scout-lang?style=for-the-badge">
 </a>
 <a href="https://crates.io/crates/scoutlang">
