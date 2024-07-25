@@ -1,4 +1,4 @@
-use crate::Object;
+use crate::object::Object;
 use futures::future::BoxFuture;
 use futures::lock::Mutex;
 use futures::FutureExt;

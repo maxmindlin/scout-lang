@@ -15,14 +15,14 @@ use scout_parser::ast::Identifier;
 use serde_json::Value;
 
 use crate::{
+    eval::{EvalError, EvalResult, ScrapeResultsPtr},
     object::{json_to_obj, Object},
-    EvalError, EvalResult, ScrapeResultsPtr,
 };
 
 macro_rules! assert_param_len {
     ($arg:expr, $len:expr) => {
         if $arg.len() < $len {
-            return Err($crate::EvalError::InvalidFnParams);
+            return Err($crate::eval::EvalError::InvalidFnParams);
         }
     };
 }

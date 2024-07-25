@@ -6,7 +6,7 @@ use std::{
 use scout_lexer::TokenKind;
 use scout_parser::ast::{ExprKind, Identifier};
 
-use crate::{EvalError, ImportError};
+use crate::eval::{EvalError, ImportError};
 
 #[derive(Debug)]
 pub struct ResolvedMod {
