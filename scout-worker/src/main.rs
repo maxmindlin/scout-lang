@@ -2,6 +2,7 @@ use config::Config;
 
 mod config;
 mod http;
+mod models;
 
 pub enum WorkerError {
     ConfigError(String),
@@ -9,9 +10,9 @@ pub enum WorkerError {
 
 async fn start(config: Config) {
     if let Some(http_config) = config.inputs.http {
-        if let Err(e) = http::start_http_consumer(&http_config).await {
-            println!("{e:?}");
-        }
+        // if let Err(e) = http::start_http_consumer(&http_config).await {
+        //     println!("{e:?}");
+        // }
     }
 }
 

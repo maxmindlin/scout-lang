@@ -9,3 +9,4 @@ actix-web = "4"
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1.0.203", features = ["derive"] }
 toml = "0.8.16"
+fantoccini = "0.19.3"

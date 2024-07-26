@@ -2270,6 +2270,7 @@ name = "scout-worker"
 version = "0.1.0"
 dependencies = [
  "actix-web",
+ "fantoccini",
  "scout-interpreter",
  "serde",
  "tokio",

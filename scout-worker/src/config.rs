@@ -1,5 +1,3 @@
-use std::{fs, path::Path};
-
 use serde::Deserialize;
 
 use crate::WorkerError;
