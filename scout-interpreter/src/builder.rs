@@ -1,3 +1,5 @@
+use std::process::Command;
+
 use crate::{env::EnvPointer, eval::ScrapeResultsPtr, EnvVars, Interpreter};
 
 #[derive(Debug)]
@@ -36,11 +38,14 @@ impl InterpreterBuilder {
             Some(c) => Ok(c),
             None => new_crawler(&env_vars).await,
         }?;
+
         let interpreter = Interpreter::new(
-            self.env.unwrap_or(EnvPointer::default()),
-            self.results.unwrap_or(ScrapeResultsPtr::default()),
+            self.env.unwrap_or_default(),
+            self.results.unwrap_or_default(),
             crawler,
+            crate::GeckDriverProc::new(env_vars.port() as usize),
         );
+
         Ok(interpreter)
     }
 }

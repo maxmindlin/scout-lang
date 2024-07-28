@@ -1,4 +1,7 @@
-use std::sync::Arc;
+use std::{
+    process::{Child, Command},
+    sync::Arc,
+};
 
 use env::EnvPointer;
 use eval::{eval, EvalError, ScrapeResultsPtr};
@@ -50,18 +53,43 @@ pub enum InterpreterError {
     ParserError(ParseError),
 }
 
+pub struct GeckDriverProc(Child);
+
+impl GeckDriverProc {
+    pub fn new(port: usize) -> Self {
+        let child = Command::new("geckodriver")
+            .arg("--port")
+            .arg(port.to_string())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .expect("error spinning up driver process");
+
+        // sleep to allow driver to start
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        Self(child)
+    }
+}
+
 pub struct Interpreter {
     env: EnvPointer,
     results: ScrapeResultsPtr,
     crawler: fantoccini::Client,
+    _geckodriver_proc: GeckDriverProc,
 }
 
 impl Interpreter {
-    pub fn new(env: EnvPointer, results: ScrapeResultsPtr, crawler: fantoccini::Client) -> Self {
+    pub fn new(
+        env: EnvPointer,
+        results: ScrapeResultsPtr,
+        crawler: fantoccini::Client,
+        geckodriver_proc: GeckDriverProc,
+    ) -> Self {
         Self {
             env,
             results,
             crawler,
+            _geckodriver_proc: geckodriver_proc,
         }
     }
     pub async fn eval(&self, content: &str) -> Result<Arc<Object>, InterpreterError> {
@@ -79,7 +107,16 @@ impl Interpreter {
         }
     }
 
-    pub async fn finalize(self) {
+    pub fn results(&self) -> ScrapeResultsPtr {
+        self.results.clone()
+    }
+
+    pub fn reset(&mut self) {
+        self.env = EnvPointer::default();
+        self.results = ScrapeResultsPtr::default();
+    }
+
+    pub async fn close(self) {
         let _ = self.crawler.close().await;
     }
 }
@@ -87,5 +124,29 @@ impl Interpreter {
 impl From<EvalError> for InterpreterError {
     fn from(value: EvalError) -> Self {
         InterpreterError::EvalError(value)
+    }
+}
+
+impl Drop for GeckDriverProc {
+    fn drop(&mut self) {
+        #[cfg(target_os = "windows")]
+        let mut kill = Command::new("taskkill")
+            .arg("/PID")
+            .arg(&self.0.id().to_string())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .arg("/F")
+            .spawn()
+            .expect("error sending driver kill");
+
+        #[cfg(not(target_os = "windows"))]
+        let mut kill = Command::new("kill")
+            .args(["-s", "TERM", &self.0.id().to_string()])
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .expect("error sending driver kill");
+
+        kill.wait().expect("error waiting for driver kill");
     }
 }

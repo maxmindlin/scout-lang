@@ -1,3 +1,5 @@
+use std::fs;
+
 use serde::Deserialize;
 
 use crate::WorkerError;
@@ -20,11 +22,9 @@ pub struct ConfigInputsHttp {
 
 impl Config {
     pub fn load_file(path: Option<&str>) -> Result<Self, WorkerError> {
-        fn load(content: &str) -> Result<Config, WorkerError> {
-            toml::from_str(&content).map_err(|e| WorkerError::ConfigError(e.to_string()))
-        }
-
-        let path = path.unwrap_or("scout-worker.toml");
-        load(path)
+        let path = path.unwrap_or("scout.toml");
+        let content =
+            fs::read_to_string(path).map_err(|e| WorkerError::ConfigError(e.to_string()))?;
+        toml::from_str(&content).map_err(|e| WorkerError::ConfigError(e.to_string()))
     }
 }
