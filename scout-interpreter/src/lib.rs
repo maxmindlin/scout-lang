@@ -22,8 +22,8 @@ pub struct EnvVars {
     #[serde(default)]
     scout_debug: bool,
 
-    #[serde(default = "default_port")]
-    scout_port: usize,
+    #[serde(default)]
+    scout_port: Option<usize>,
 
     #[serde(default)]
     scout_proxy: Option<String>,
@@ -34,17 +34,13 @@ impl EnvVars {
         self.scout_debug
     }
 
-    pub fn port(&self) -> usize {
+    pub fn port(&self) -> Option<usize> {
         self.scout_port
     }
 
     pub fn proxy(&self) -> &Option<String> {
         &self.scout_proxy
     }
-}
-
-fn default_port() -> usize {
-    4444
 }
 
 #[derive(Debug)]

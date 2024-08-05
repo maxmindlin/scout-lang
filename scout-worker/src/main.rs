@@ -1,32 +1,53 @@
-use std::sync::Arc;
-
 use config::Config;
-use scout_interpreter::{builder::InterpreterBuilder, Interpreter};
-use tokio::sync::Mutex;
+use rmq::producer::Producer;
 
 mod config;
 mod http;
 mod models;
+mod rmq;
 
 pub enum WorkerError {
     ConfigError(String),
 }
 
-async fn start(config: Config, interpeter: Interpreter) {
-    let inter_ptr = Arc::new(Mutex::new(interpeter));
-    if let Some(http_config) = config.inputs.http {
-        if let Err(e) = http::start_http_consumer(&http_config, inter_ptr.clone()).await {
-            println!("{e:?}");
+pub enum Output {
+    RMQ(rmq::producer::Producer),
+}
+
+impl Output {
+    pub async fn send(&self, payload: String) -> Result<(), Box<dyn std::error::Error>> {
+        match self {
+            Output::RMQ(p) => {
+                p.send(payload).await?;
+                Ok(())
+            }
         }
     }
+}
+
+async fn start(config: Config) -> Result<(), Box<dyn std::error::Error>> {
+    let mut outputs = Vec::new();
+    if let Some(outputs_config) = config.outputs {
+        if let Some(rmq) = outputs_config.rmq {
+            let rmq_out = Producer::new(&rmq).await?;
+            outputs.push(Output::RMQ(rmq_out));
+        }
+    }
+
+    if let Some(http_config) = config.inputs.http {
+        http::start_http_consumer(&http_config).await?;
+    } else if let Some(rmq_config) = config.inputs.rmq {
+        let mut consumer = rmq::consumer::Consumer::new(&rmq_config).await?;
+        consumer.start().await.expect("error starting consumer");
+    }
+
+    Ok(())
 }
 
 #[tokio::main]
 async fn main() {
     let config = Config::load_file(None).unwrap_or_default();
-    let interpreter = InterpreterBuilder::default()
-        .build()
-        .await
-        .expect("error building interpreter");
-    start(config, interpreter).await;
+    if let Err(e) = start(config).await {
+        println!("error starting worker: {e}")
+    }
 }
