@@ -15,18 +15,32 @@ pub struct Config {
 #[derive(Debug, Default, Deserialize)]
 pub struct ConfigOutputs {
     pub rmq: Option<ConfigRMQ>,
+    pub http: Option<ConfigOutputHttp>,
 }
 
 #[derive(Debug, Default, Deserialize)]
 pub struct ConfigInputs {
-    pub http: Option<ConfigInputsHttp>,
+    pub http: Option<ConfigInputHttp>,
     pub rmq: Option<ConfigRMQ>,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct ConfigInputsHttp {
+pub struct ConfigInputHttp {
     pub addr: String,
     pub port: usize,
+}
+
+#[derive(Debug, Deserialize)]
+pub enum OutputMethods {
+    POST,
+    PUT,
+    PATCH,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ConfigOutputHttp {
+    pub endpoint: String,
+    pub method: OutputMethods,
 }
 
 #[derive(Debug, Deserialize)]
@@ -43,5 +57,15 @@ impl Config {
         let content =
             fs::read_to_string(path).map_err(|e| WorkerError::ConfigError(e.to_string()))?;
         toml::from_str(&content).map_err(|e| WorkerError::ConfigError(e.to_string()))
+    }
+}
+
+impl std::fmt::Display for OutputMethods {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::PATCH => write!(f, "PATCH"),
+            Self::POST => write!(f, "POST"),
+            Self::PUT => write!(f, "PUT"),
+        }
     }
 }

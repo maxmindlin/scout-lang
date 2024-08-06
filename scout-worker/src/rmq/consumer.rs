@@ -11,9 +11,10 @@ use scout_interpreter::{
     builder::{BuilderError, InterpreterBuilder},
     Interpreter, InterpreterError,
 };
-use std::{fmt::Display, fs, str};
+use std::{fmt::Display, fs, str, sync::Arc};
+use tracing::{error, info};
 
-use crate::{config::ConfigRMQ, models::incoming};
+use crate::{config::ConfigRMQ, models::incoming, Output};
 
 #[derive(Debug)]
 pub enum ConsumerError {
@@ -25,10 +26,11 @@ pub struct Consumer {
     chann: Channel,
     queue: String,
     interpreter: Interpreter,
+    outputs: Arc<Vec<Output>>,
 }
 
 impl Consumer {
-    pub async fn new(config: &ConfigRMQ) -> Result<Self, ConsumerError> {
+    pub async fn new(config: &ConfigRMQ, outputs: Arc<Vec<Output>>) -> Result<Self, ConsumerError> {
         let conn = Connection::connect(&config.addr, ConnectionProperties::default()).await?;
         let chann = conn.create_channel().await?;
         let interpreter = InterpreterBuilder::default().build().await?;
@@ -64,6 +66,7 @@ impl Consumer {
             chann,
             queue: config.queue.clone(),
             interpreter,
+            outputs,
         })
     }
 
@@ -90,10 +93,17 @@ impl Consumer {
             )
             .await?;
 
+        info!("listening on queue {}", self.queue);
         while let Some(delivery) = consumer.next().await {
             if let Ok(delivery) = delivery {
+                info!("processing msg");
                 match self.process(&delivery.data).await {
                     Ok(res) => {
+                        for output in self.outputs.iter() {
+                            if let Err(e) = output.send(&res).await {
+                                error!("error sending to output: {e}");
+                            }
+                        }
                         delivery.ack(BasicAckOptions::default()).await?;
                     }
                     Err(_) => {

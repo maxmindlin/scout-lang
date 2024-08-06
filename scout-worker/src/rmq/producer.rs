@@ -5,6 +5,7 @@ use lapin::{
     types::FieldTable,
     BasicProperties, Channel, Connection, ConnectionProperties, ExchangeKind,
 };
+use tracing::info;
 
 use crate::config::ConfigRMQ;
 
@@ -15,7 +16,6 @@ pub enum ProducerError {
 
 pub struct Producer {
     chann: Channel,
-    queue: String,
     exchange: String,
     out_key: String,
 }
@@ -44,19 +44,19 @@ impl Producer {
 
         Ok(Self {
             chann,
-            queue: config.queue.clone(),
             exchange: config.exchange.clone(),
             out_key: config.routing_key.clone(),
         })
     }
 
-    pub async fn send(&self, payload: String) -> Result<(), ProducerError> {
+    pub async fn send(&self, payload: &str) -> Result<(), ProducerError> {
+        info!("publishing message to {}", self.out_key);
         self.chann
             .basic_publish(
                 &self.exchange,
                 &self.out_key,
                 BasicPublishOptions::default(),
-                &payload,
+                &payload.as_bytes(),
                 BasicProperties::default(),
             )
             .await?;

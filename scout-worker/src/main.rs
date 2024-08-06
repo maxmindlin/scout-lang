@@ -1,28 +1,19 @@
+use std::sync::Arc;
+
 use config::Config;
+use http::sender::Sender;
+use output::Output;
 use rmq::producer::Producer;
+use tracing::error;
 
 mod config;
 mod http;
 mod models;
+mod output;
 mod rmq;
 
 pub enum WorkerError {
     ConfigError(String),
-}
-
-pub enum Output {
-    RMQ(rmq::producer::Producer),
-}
-
-impl Output {
-    pub async fn send(&self, payload: String) -> Result<(), Box<dyn std::error::Error>> {
-        match self {
-            Output::RMQ(p) => {
-                p.send(payload).await?;
-                Ok(())
-            }
-        }
-    }
 }
 
 async fn start(config: Config) -> Result<(), Box<dyn std::error::Error>> {
@@ -32,13 +23,21 @@ async fn start(config: Config) -> Result<(), Box<dyn std::error::Error>> {
             let rmq_out = Producer::new(&rmq).await?;
             outputs.push(Output::RMQ(rmq_out));
         }
+
+        if let Some(http) = outputs_config.http {
+            let http_out = Sender::new(&http.method, http.endpoint)?;
+            outputs.push(Output::HTTP(http_out));
+        }
     }
 
+    let aoutputs = Arc::new(outputs);
     if let Some(http_config) = config.inputs.http {
-        http::start_http_consumer(&http_config).await?;
+        http::server::start_http_consumer(&http_config, aoutputs.clone()).await?;
     } else if let Some(rmq_config) = config.inputs.rmq {
-        let mut consumer = rmq::consumer::Consumer::new(&rmq_config).await?;
-        consumer.start().await.expect("error starting consumer");
+        rmq::consumer::Consumer::new(&rmq_config, aoutputs.clone())
+            .await?
+            .start()
+            .await?;
     }
 
     Ok(())
@@ -46,8 +45,12 @@ async fn start(config: Config) -> Result<(), Box<dyn std::error::Error>> {
 
 #[tokio::main]
 async fn main() {
+    if std::env::var("RUST_LOG").is_err() {
+        std::env::set_var("RUST_LOG", "info");
+    }
+
     let config = Config::load_file(None).unwrap_or_default();
     if let Err(e) = start(config).await {
-        println!("error starting worker: {e}")
+        error!("error starting worker: {e}");
     }
 }
