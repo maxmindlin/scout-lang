@@ -2,7 +2,7 @@ use futures_lite::StreamExt;
 use lapin::{
     options::{
         BasicAckOptions, BasicConsumeOptions, BasicNackOptions, ExchangeDeclareOptions,
-        QueueDeclareOptions,
+        QueueBindOptions, QueueDeclareOptions,
     },
     types::FieldTable,
     Channel, Connection, ConnectionProperties, ExchangeKind,
@@ -46,6 +46,16 @@ impl Consumer {
             .queue_declare(
                 &config.queue,
                 QueueDeclareOptions::default(),
+                FieldTable::default(),
+            )
+            .await?;
+
+        chann
+            .queue_bind(
+                &config.queue,
+                &config.exchange,
+                &config.routing_key,
+                QueueBindOptions::default(),
                 FieldTable::default(),
             )
             .await?;

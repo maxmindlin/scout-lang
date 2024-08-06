@@ -34,6 +34,7 @@ pub struct ConfigRMQ {
     pub addr: String,
     pub queue: String,
     pub exchange: String,
+    pub routing_key: String,
 }
 
 impl Config {
