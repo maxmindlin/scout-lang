@@ -1,4 +1,5 @@
 use reqwest::Method;
+use tracing::info;
 
 use crate::config::OutputMethods;
 
@@ -23,13 +24,14 @@ impl Sender {
     }
 
     pub async fn send(&self, payload: &str) -> Result<(), reqwest::Error> {
+        info!("sending output to {} {}", self.method, self.endpoint);
         let req = self
             .client
             .request(self.method.clone(), &self.endpoint)
             .body(payload.to_owned())
             .build()?;
-        self.client.execute(req).await?;
-
+        let res = self.client.execute(req).await?;
+        info!("received response code {}", res.status());
         Ok(())
     }
 }
