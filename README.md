@@ -56,7 +56,7 @@ The `scout` binary ran with a filename will read and interpret a script file. Wi
 
 Available ENV variables:
 - `SCOUT_DEBUG`: Whether or not to open the debug browser. Defaults to `false`.
-- `SCOUT_PORT`: Which port to run Scout on. Defaults to `4444`.
+- `SCOUT_PORT`: Which port to run Scout on. Defaults to a random open port. Do not set if you intend to run multiple scout instances at once as ports will conflict.
 - `SCOUT_PROXY`: An optional URL to proxy requests to. Defaults to none.
 - `SCOUT_PATH`: A path to where Scout installs dependencies, like the standard lib. Defaults to `$HOME/scout-lang/`.
 

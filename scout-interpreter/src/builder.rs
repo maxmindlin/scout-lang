@@ -1,3 +1,5 @@
+use get_port::Ops;
+
 use crate::{env::EnvPointer, eval::ScrapeResultsPtr, EnvVars, Interpreter};
 
 #[derive(Debug)]
@@ -32,20 +34,27 @@ impl InterpreterBuilder {
     pub async fn build(self) -> Result<Interpreter, BuilderError> {
         let env_vars =
             envy::from_env::<EnvVars>().map_err(|e| BuilderError::EnvError(e.to_string()))?;
+        let port = env_vars
+            .port()
+            .unwrap_or_else(|| get_port::tcp::TcpPort::any("127.0.0.1").unwrap() as usize);
+        let child = crate::GeckDriverProc::new(port);
         let crawler = match self.crawler {
             Some(c) => Ok(c),
-            None => new_crawler(&env_vars).await,
+            None => new_crawler(&env_vars, port).await,
         }?;
+
         let interpreter = Interpreter::new(
-            self.env.unwrap_or(EnvPointer::default()),
-            self.results.unwrap_or(ScrapeResultsPtr::default()),
+            self.env.unwrap_or_default(),
+            self.results.unwrap_or_default(),
             crawler,
+            child,
         );
+
         Ok(interpreter)
     }
 }
 
-async fn new_crawler(env_vars: &EnvVars) -> Result<fantoccini::Client, BuilderError> {
+async fn new_crawler(env_vars: &EnvVars, port: usize) -> Result<fantoccini::Client, BuilderError> {
     let mut caps = serde_json::map::Map::new();
     if !env_vars.scout_debug {
         let opts = serde_json::json!({ "args": ["--headless"] });
@@ -58,7 +67,7 @@ async fn new_crawler(env_vars: &EnvVars) -> Result<fantoccini::Client, BuilderEr
         });
         caps.insert("proxy".into(), opt);
     }
-    let conn_url = format!("http://localhost:{}", env_vars.scout_port);
+    let conn_url = format!("http://localhost:{}", port);
     let crawler = fantoccini::ClientBuilder::native()
         .capabilities(caps)
         .connect(&conn_url)
