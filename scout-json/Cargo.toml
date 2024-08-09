@@ -1,0 +1,12 @@
+[package]
+name = "scout-json"
+version = "0.6.0"
+edition = "2021"
+
+[dependencies]
+scout-parser = { version = "0.6.0", path = "../scout-parser/" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+[dev-dependencies]
+test-case = "3.3.1"

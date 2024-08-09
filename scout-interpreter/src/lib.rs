@@ -6,6 +6,7 @@ use std::{
 use env::EnvPointer;
 use eval::{eval, EvalError, ScrapeResultsPtr};
 use object::Object;
+use scout_json::ScoutJSON;
 use scout_lexer::Lexer;
 use scout_parser::{ast::NodeKind, ParseError, Parser};
 use serde::Deserialize;
@@ -47,6 +48,7 @@ impl EnvVars {
 pub enum InterpreterError {
     EvalError(EvalError),
     ParserError(ParseError),
+    InvalidJson,
 }
 
 pub struct GeckDriverProc(Child);
@@ -88,6 +90,7 @@ impl Interpreter {
             _geckodriver_proc: geckodriver_proc,
         }
     }
+
     pub async fn eval(&self, content: &str) -> Result<Arc<Object>, InterpreterError> {
         let lexer = Lexer::new(content);
         let mut parser = Parser::new(lexer);
@@ -101,6 +104,19 @@ impl Interpreter {
             .await?),
             Err(e) => Err(InterpreterError::ParserError(e)),
         }
+    }
+
+    pub async fn eval_json(&self, content: &str) -> Result<Arc<Object>, InterpreterError> {
+        let ast = serde_json::from_str::<ScoutJSON>(content)
+            .map_err(|_| InterpreterError::InvalidJson)?
+            .to_ast();
+        Ok(eval(
+            NodeKind::Program(ast),
+            &self.crawler,
+            self.env.clone(),
+            self.results.clone(),
+        )
+        .await?)
     }
 
     pub fn results(&self) -> ScrapeResultsPtr {

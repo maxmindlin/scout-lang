@@ -289,7 +289,7 @@ impl Parser {
     }
 
     fn parse_prefix(&mut self) -> ParseResult<ExprKind> {
-        let op = self.curr.kind;
+        let op = self.curr.clone();
         self.next_token();
         let expr = self.parse_expr(Precedence::Lowest)?;
         Ok(ExprKind::Prefix(Box::new(expr), op))
@@ -479,7 +479,7 @@ impl Parser {
 
     fn parse_infix(&mut self, lhs: ExprKind) -> ParseResult<ExprKind> {
         // self.next_token();
-        let op = self.curr.kind;
+        let op = self.curr.clone();
         let prec = self.curr_precedence();
         self.next_token();
         let rhs = self.parse_expr(prec)?;
@@ -734,7 +734,7 @@ mod tests {
         r#"x = 1 == 2"#,
         StmtKind::Assign(
             ExprKind::Ident(Identifier::new("x".to_string())),
-            ExprKind::Infix(Box::new(ExprKind::Number(1.)), TokenKind::EQ, Box::new(ExprKind::Number(2.)))
+            ExprKind::Infix(Box::new(ExprKind::Number(1.)), Token::new(TokenKind::EQ, "==".to_string()), Box::new(ExprKind::Number(2.)))
         ); "assign eq infix"
     )]
     #[test_case(
@@ -744,7 +744,7 @@ mod tests {
                 Box::new(
                     ExprKind::Ident(Identifier::new("a".into()))
                 ),
-                TokenKind::LBracket,
+                Token::new(TokenKind::LBracket, "[".to_string()),
                 Box::new(
                     ExprKind::Number(0.)
                 )
@@ -870,7 +870,7 @@ mod tests {
         StmtKind::Expr(
             ExprKind::Infix(
                 Box::new(ExprKind::Ident(Identifier::new("a".into()))),
-                TokenKind::LBracket,
+                Token::new(TokenKind::LBracket, "[".to_string()),
                 Box::new(ExprKind::Number(0.))
             )
         ); "index"
@@ -887,14 +887,18 @@ mod tests {
                     link: Identifier::new("link".into()),
                     depth: Identifier::new("depth".into())
                 }),
-                Some(ExprKind::Infix(Box::new(ExprKind::Ident(Identifier::new("depth".into()))), TokenKind::LT, Box::new(ExprKind::Number(1.)))),
+                Some(ExprKind::Infix(
+                    Box::new(ExprKind::Ident(Identifier::new("depth".into()))),
+                    Token::new(TokenKind::LT, "<".to_string()),
+                    Box::new(ExprKind::Number(1.))
+                )),
                 Block::default()
             )
         ); "crawl stmt with bindings"
     )]
     #[test_case(
         "!true",
-        StmtKind::Expr(ExprKind::Prefix(Box::new(ExprKind::Boolean(true)), TokenKind::Bang,)); "bang prefix"
+        StmtKind::Expr(ExprKind::Prefix(Box::new(ExprKind::Boolean(true)), Token::new(TokenKind::Bang, "!".to_string()))); "bang prefix"
     )]
     #[test_case(
         "a::b",
@@ -903,7 +907,7 @@ mod tests {
                 Box::new(
                     ExprKind::Ident(Identifier::new("a".into()))
                 ),
-                TokenKind::DbColon,
+                Token::new(TokenKind::DbColon, "::".to_string()),
                 Box::new(
                     ExprKind::Ident(Identifier::new("b".into()))
                 )
@@ -917,7 +921,7 @@ mod tests {
                 Box::new(
                     ExprKind::Ident(Identifier::new("a".into()))
                 ),
-                TokenKind::LT,
+                Token::new(TokenKind::LT, "<".to_string()),
                 Box::new(
                     ExprKind::Number(1.)
                 )

@@ -55,18 +55,22 @@ fn convert_path_buf(buf: PathBuf) -> Result<String, EvalError> {
 fn resolve_module_file(module: &ExprKind) -> Result<PathBuf, EvalError> {
     match module {
         ExprKind::Ident(ident) => resolve_std_file(ident),
-        ExprKind::Infix(lhs, TokenKind::DbColon, rhs) => match (lhs.as_ref(), rhs.as_ref()) {
-            (ExprKind::Ident(base), ExprKind::Ident(file)) => {
-                let buf = resolve_std_file(base)?.join(&file.name);
-                Ok(buf)
+        ExprKind::Infix(lhs, t, rhs) if t.kind == TokenKind::DbColon => {
+            match (lhs.as_ref(), rhs.as_ref()) {
+                (ExprKind::Ident(base), ExprKind::Ident(file)) => {
+                    let buf = resolve_std_file(base)?.join(&file.name);
+                    Ok(buf)
+                }
+                (l @ ExprKind::Infix(_, t, _), ExprKind::Ident(file))
+                    if t.kind == TokenKind::DbColon =>
+                {
+                    let base = resolve_module_file(l)?;
+                    let buf = base.join(&file.name);
+                    Ok(buf)
+                }
+                _ => Err(EvalError::InvalidImport(ImportError::UnknownModule)),
             }
-            (l @ ExprKind::Infix(_, TokenKind::DbColon, _), ExprKind::Ident(file)) => {
-                let base = resolve_module_file(l)?;
-                let buf = base.join(&file.name);
-                Ok(buf)
-            }
-            _ => Err(EvalError::InvalidImport(ImportError::UnknownModule)),
-        },
+        }
         _ => Err(EvalError::InvalidImport(ImportError::UnknownModule)),
     }
 }
