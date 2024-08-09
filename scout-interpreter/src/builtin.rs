@@ -50,6 +50,7 @@ pub enum BuiltinKind {
     SetCookies,
     ToJson,
     HttpRequest,
+    SetViewport,
 }
 
 impl BuiltinKind {
@@ -77,6 +78,7 @@ impl BuiltinKind {
             "setCookies" => Some(SetCookies),
             "toJson" => Some(ToJson),
             "httpRequest" => Some(HttpRequest),
+            "setViewport" => Some(SetViewport),
             _ => None,
         }
     }
@@ -145,6 +147,16 @@ impl BuiltinKind {
                             (Identifier::new("content".to_string()), content),
                         ];
                         Ok(Arc::new(Object::Map(Mutex::new(kvs.into_iter().collect()))))
+                    }
+                    _ => Err(EvalError::InvalidFnParams),
+                }
+            }
+            SetViewport => {
+                assert_param_len!(args, 2);
+                match (&*args[0], &*args[1]) {
+                    (Object::Number(w), Object::Number(h)) => {
+                        crawler.set_window_size(*w as u32, *h as u32).await?;
+                        Ok(Arc::new(Object::Null))
                     }
                     _ => Err(EvalError::InvalidFnParams),
                 }

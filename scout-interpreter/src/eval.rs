@@ -216,7 +216,7 @@ fn eval_statement<'a>(
             StmtKind::Assign(lhs, expr) => {
                 let val = eval_expression(expr, crawler, env.clone(), results.clone()).await?;
                 match lhs {
-                    ExprKind::Infix(lhs, TokenKind::LBracket, rhs) => {
+                    ExprKind::Infix(lhs, t, rhs) if t.kind == TokenKind::LBracket => {
                         let r_obj =
                             eval_expression(rhs, crawler, env.clone(), results.clone()).await?;
                         let l_obj =
@@ -788,7 +788,7 @@ fn eval_expression<'a>(
                 let l_obj = eval_expression(lhs, crawler, env.clone(), results.clone()).await?;
                 let res = eval_infix(
                     l_obj.clone(),
-                    op,
+                    &op.kind,
                     rhs,
                     crawler,
                     env.clone(),
@@ -810,7 +810,7 @@ fn eval_expression<'a>(
             }
             ExprKind::Prefix(rhs, op) => {
                 let r_obj = eval_expression(rhs, crawler, env.clone(), results.clone()).await?;
-                let res = eval_prefix(r_obj, op).await?;
+                let res = eval_prefix(r_obj, &op.kind).await?;
                 Ok(res)
             }
         }

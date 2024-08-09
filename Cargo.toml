@@ -1,5 +1,5 @@
 [workspace]
-members = ["scout-interpreter", "scout-lexer", "scout-parser", "scout-worker"]
+members = ["scout-interpreter", "scout-json", "scout-lexer", "scout-parser", "scout-worker"]
 
 # Config for 'cargo dist'
 [workspace.metadata.dist]
