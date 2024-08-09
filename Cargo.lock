@@ -2730,7 +2730,7 @@ dependencies = [
 
 [[package]]
 name = "scout-worker"
-version = "0.1.0"
+version = "0.6.0"
 dependencies = [
  "actix-web",
  "futures-lite 2.3.0",
