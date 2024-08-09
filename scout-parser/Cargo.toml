@@ -1,6 +1,6 @@
 [package]
 name = "scout-parser"
-version = "0.7.0"
+version = "0.7.1"
 edition = "2021"
 repository = "https://github.com/maxmindlin/scout-lang"
 description = "A web crawling programming language"
@@ -17,7 +17,7 @@ keywords = [
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-scout-lexer = { version = "0.7.0", path = "../scout-lexer/" }
+scout-lexer = { version = "0.7.1", path = "../scout-lexer/" }
 
 [dev-dependencies]
 test-case = "3.3.1"
