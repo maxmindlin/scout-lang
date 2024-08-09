@@ -1,6 +1,6 @@
 [package]
 name = "scout-lexer"
-version = "0.6.0"
+version = "0.7.0"
 edition = "2021"
 repository = "https://github.com/maxmindlin/scout-lang"
 description = "A web crawling programming language"

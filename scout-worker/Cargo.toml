@@ -1,10 +1,10 @@
 [package]
 name = "scout-worker"
-version = "0.6.0"
+version = "0.7.0"
 edition = "2021"
 
 [dependencies]
-scout-interpreter = { version = "0.6.0", path = "../scout-interpreter/" }
+scout-interpreter = { version = "0.7.0", path = "../scout-interpreter/" }
 actix-web = "4"
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1.0.203", features = ["derive"] }
