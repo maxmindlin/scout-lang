@@ -12,9 +12,20 @@ pub struct ScoutJSON {
 #[serde(tag = "type")]
 #[serde(rename_all = "camelCase")]
 pub enum Step {
-    SetViewport { width: u32, height: u32 },
-    Navigate { url: String },
-    Click { selectors: Vec<Vec<String>> },
+    SetViewport {
+        width: u32,
+        height: u32,
+    },
+    Navigate {
+        url: String,
+    },
+    Click {
+        selectors: Vec<Vec<String>>,
+    },
+    Change {
+        value: String,
+        selectors: Vec<Vec<String>>,
+    },
 }
 
 impl ScoutJSON {
@@ -45,17 +56,7 @@ impl Step {
             }
             Navigate { url } => StmtKind::Goto(ExprKind::Str(url.clone())),
             Click { selectors } => {
-                // By default, chrome outputs an arry and the length depends upon what
-                // outputs are set in the recording. We will assume only CSS is set as
-                // the others are not usable by scout yet.
-                // The css value is an array of length 1, ex:
-                //
-                // "selectors": [
-                //     [
-                //         "#question-summary-78853169 h3 > a"
-                //     ]
-                // ]
-                let elem = ExprKind::Select(selectors[0][0].clone(), None);
+                let elem = ExprKind::Select(selector_from_recorder_mtx(selectors.as_ref()), None);
                 let lit = CallLiteral {
                     ident: Identifier::new("click".to_string()),
                     args: vec![elem],
@@ -63,8 +64,32 @@ impl Step {
                 };
                 StmtKind::Expr(ExprKind::Call(lit))
             }
+            Change { value, selectors } => {
+                let elem = ExprKind::Select(selector_from_recorder_mtx(selectors.as_ref()), None);
+                let val = ExprKind::Str(value.clone());
+                let lit = CallLiteral {
+                    ident: Identifier::new("input".to_string()),
+                    args: vec![elem, val],
+                    kwargs: Vec::new(),
+                };
+                StmtKind::Expr(ExprKind::Call(lit))
+            }
         }
     }
+}
+
+fn selector_from_recorder_mtx(mtx: &[Vec<String>]) -> String {
+    // By default, chrome outputs an arry and the length depends upon what
+    // outputs are set in the recording. We will assume only CSS is set as
+    // the others are not usable by scout yet.
+    // The css value is an array of length 1, ex:
+    //
+    // "selectors": [
+    //     [
+    //         "#question-summary-78853169 h3 > a"
+    //     ]
+    // ]
+    mtx[0][0].clone()
 }
 
 #[cfg(test)]
