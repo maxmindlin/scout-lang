@@ -32,6 +32,7 @@ impl Object {
             Boolean(_) => "bool",
             Number(_) => "number",
             Fn(_, _) => "fn",
+            Module(_) => "module",
             _ => "object",
         }
     }
@@ -51,6 +52,17 @@ impl Object {
                     .collect();
 
                 Some(new_vec)
+            }
+            Module(ev) => {
+                let inner = ev.lock().await;
+                let mut iterable = Vec::new();
+                for (id, obj) in &inner.store {
+                    if obj.type_str() == "module" {
+                        let item = vec![Arc::new(Str(id.clone())), obj.clone()];
+                        iterable.push(Arc::new(Object::List(Mutex::new(item))))
+                    }
+                }
+                Some(iterable)
             }
             _ => None,
         }

@@ -35,7 +35,7 @@ macro_rules! check_return_eval {
         if let $crate::object::Object::Return(ret) =
             &*eval_block($block, $crawler, $env, $results).await?
         {
-            return Ok(ret.clone());
+            return Ok(Arc::new($crate::object::Object::Return(ret.clone())));
         }
     };
 }
@@ -156,7 +156,7 @@ fn eval_statement<'a>(
                     .await
                     .as_deref()
                 {
-                    Ok(Object::Return(ret)) => return Ok(ret.clone()),
+                    Ok(Object::Return(ret)) => return Ok(Arc::new(Object::Return(ret.clone()))),
                     // if it was successful but not a return, do nothing
                     Ok(_) => {}
                     Err(_) if catch_block.is_some() => {
@@ -544,15 +544,21 @@ async fn eval_block(
             StmtKind::Return(rv) => {
                 return match rv {
                     None => Ok(Arc::new(Object::Return(Arc::new(Object::Null)))),
-                    Some(expr) => Ok(Arc::new(Object::Return(
-                        eval_expression(expr, crawler, env.clone(), results.clone()).await?,
-                    ))),
-                }
+                    Some(expr) => {
+                        let r =
+                            eval_expression(expr, crawler, env.clone(), results.clone()).await?;
+                        Ok(Arc::new(Object::Return(r)))
+                    }
+                };
             }
             _ => {
-                res = eval_statement(stmt, crawler, env.clone(), results.clone())
-                    .await?
-                    .clone()
+                let temp = eval_statement(stmt, crawler, env.clone(), results.clone()).await?;
+                match &*temp {
+                    Object::Return(_) => return Ok(temp.clone()),
+                    _ => {
+                        res = temp.clone();
+                    }
+                }
             }
         }
     }

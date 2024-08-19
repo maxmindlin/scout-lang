@@ -11,7 +11,7 @@ pub type EnvPointer = Arc<Mutex<Env>>;
 
 #[derive(Debug, Default)]
 pub struct Env {
-    store: HashMap<String, Arc<Object>>,
+    pub store: HashMap<String, Arc<Object>>,
     outer: Mutex<Weak<Mutex<Env>>>,
 }
 
