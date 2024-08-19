@@ -1,6 +1,6 @@
 [package]
 name = "scout-worker"
-version = "0.7.1"
+version = "0.7.2"
 edition = "2021"
 repository = "https://github.com/maxmindlin/scout-lang"
 description = "A worker framework for ScoutLang"
@@ -15,7 +15,7 @@ keywords = [
 ]
 
 [dependencies]
-scout-interpreter = { version = "0.7.1", path = "../scout-interpreter/" }
+scout-interpreter = { version = "0.7.2", path = "../scout-interpreter/" }
 actix-web = "4"
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1.0.203", features = ["derive"] }

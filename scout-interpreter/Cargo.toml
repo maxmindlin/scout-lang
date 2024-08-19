@@ -1,6 +1,6 @@
 [package]
 name = "scout-interpreter"
-version = "0.7.1"
+version = "0.7.2"
 edition = "2021"
 repository = "https://github.com/maxmindlin/scout-lang"
 description = "A web crawling programming language"
@@ -17,14 +17,14 @@ keywords = [
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-scout-parser = { version = "0.7.1", path = "../scout-parser/" }
-scout-json = { version = "0.7.1", path = "../scout-json" }
+scout-parser = { version = "0.7.2", path = "../scout-parser/" }
+scout-json = { version = "0.7.2", path = "../scout-json" }
 fantoccini = "0.19.3"
 futures = "0.3.30"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 image = "0.25.1"
-scout-lexer = { version = "0.7.1", path = "../scout-lexer/" }
+scout-lexer = { version = "0.7.2", path = "../scout-lexer/" }
 url = "2.5.2"
 reqwest = { version = "0.12", features = ["json", "cookies"] }
 envy = "0.4.2"
