@@ -108,7 +108,7 @@ impl Lexer {
                         Token::new(Int, lit)
                     }
                 }
-                _ if c.is_alphabetic() => {
+                _ if is_valid_identifier(c) => {
                     let lit = self.read_identifier();
                     match TokenKind::is_to_keyword(&lit) {
                         Some(t) => Token::new(t, lit),

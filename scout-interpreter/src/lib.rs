@@ -5,6 +5,7 @@ use std::{
 
 use env::EnvPointer;
 use eval::{eval, EvalError, ScrapeResultsPtr};
+use fantoccini::error::CmdError;
 use object::Object;
 use scout_json::ScoutJSON;
 use scout_lexer::Lexer;
@@ -128,6 +129,11 @@ impl Interpreter {
         self.results = ScrapeResultsPtr::default();
     }
 
+    pub async fn current_url(&self) -> Result<String, InterpreterError> {
+        let url = self.crawler.current_url().await?;
+        Ok(url.to_string())
+    }
+
     pub async fn close(self) {
         let _ = self.crawler.close().await;
     }
@@ -136,6 +142,12 @@ impl Interpreter {
 impl From<EvalError> for InterpreterError {
     fn from(value: EvalError) -> Self {
         InterpreterError::EvalError(value)
+    }
+}
+
+impl From<CmdError> for InterpreterError {
+    fn from(value: CmdError) -> Self {
+        InterpreterError::EvalError(EvalError::BrowserError(value))
     }
 }
 

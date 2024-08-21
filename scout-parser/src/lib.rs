@@ -98,6 +98,7 @@ pub enum ParseError {
     InvalidToken(TokenKind),
     InvalidNumber,
     InvalidFnCall,
+    InvalidGlobal,
     DefaultFnParamBefore,
     UnknownPrefix(TokenKind),
 }
@@ -147,49 +148,50 @@ impl Parser {
         Precedence::from(self.curr.kind)
     }
 
+    fn parse_fn_def(&mut self) -> ParseResult<FuncDef> {
+        self.expect_peek(TokenKind::Ident)?;
+        let ident = Identifier::new(self.curr.literal.clone());
+        self.expect_peek(TokenKind::LParen)?;
+
+        let mut args = Vec::new();
+        let mut has_defaults = false;
+        while self.peek.kind == TokenKind::Comma || self.peek.kind != TokenKind::RParen {
+            self.next_token();
+            match self.curr.kind {
+                TokenKind::Comma => {}
+                TokenKind::Ident => {
+                    let ident = Identifier::new(self.curr.literal.clone());
+                    let mut default = None;
+                    if self.peek.kind == TokenKind::Assign {
+                        self.next_token();
+                        self.next_token();
+                        default = Some(self.parse_expr(Precedence::Lowest)?);
+                        has_defaults = true;
+                    } else if has_defaults {
+                        // Dont allow non-default params after default params.
+                        // If we dont disallow this then the interpreter will have a
+                        // hard time
+                        return Err(ParseError::DefaultFnParamBefore);
+                    }
+                    args.push(FnParam::new(ident, default));
+                }
+                _ => {
+                    return Err(ParseError::InvalidToken(self.curr.kind));
+                }
+            }
+        }
+
+        self.expect_peek(TokenKind::RParen)?;
+        self.expect_peek(TokenKind::Do)?;
+        self.next_token();
+
+        let block = self.parse_block(vec![TokenKind::End])?;
+        Ok(FuncDef::new(ident, args, block))
+    }
+
     fn parse_stmt(&mut self) -> ParseResult<StmtKind> {
         let lhs = match self.curr.kind {
-            TokenKind::Def => {
-                self.expect_peek(TokenKind::Ident)?;
-                let ident = Identifier::new(self.curr.literal.clone());
-                self.expect_peek(TokenKind::LParen)?;
-
-                let mut args = Vec::new();
-                let mut has_defaults = false;
-                while self.peek.kind == TokenKind::Comma || self.peek.kind != TokenKind::RParen {
-                    self.next_token();
-                    match self.curr.kind {
-                        TokenKind::Comma => {}
-                        TokenKind::Ident => {
-                            let ident = Identifier::new(self.curr.literal.clone());
-                            let mut default = None;
-                            if self.peek.kind == TokenKind::Assign {
-                                self.next_token();
-                                self.next_token();
-                                default = Some(self.parse_expr(Precedence::Lowest)?);
-                                has_defaults = true;
-                            } else if has_defaults {
-                                // Dont allow non-default params after default params.
-                                // If we dont disallow this then the interpreter will have a
-                                // hard time
-                                return Err(ParseError::DefaultFnParamBefore);
-                            }
-                            args.push(FnParam::new(ident, default));
-                        }
-                        _ => {
-                            return Err(ParseError::InvalidToken(self.curr.kind));
-                        }
-                    }
-                }
-
-                self.expect_peek(TokenKind::RParen)?;
-                self.expect_peek(TokenKind::Do)?;
-                self.next_token();
-
-                let block = self.parse_block(vec![TokenKind::End])?;
-
-                Ok(StmtKind::Func(FuncDef::new(ident, args, block)))
-            }
+            TokenKind::Def => Ok(StmtKind::Func(self.parse_fn_def()?, false)),
             TokenKind::Goto => self.parse_goto_stmt(),
             TokenKind::Scrape => self.parse_scrape_stmt(),
             TokenKind::For => self.parse_for_loop(),
@@ -203,9 +205,31 @@ impl Parser {
                     self.next_token();
                     self.next_token();
                     let val = self.parse_expr(Precedence::Lowest)?;
-                    Ok(StmtKind::Assign(lhs, val))
+                    Ok(StmtKind::Assign(lhs, val, false))
                 }
                 _ => self.parse_expr_stmt(),
+            },
+            TokenKind::Global => match self.peek.kind {
+                TokenKind::Ident => {
+                    self.next_token();
+                    match self.peek.kind {
+                        TokenKind::Assign => {
+                            // let ident = Identifier::new(self.curr.literal.clone());
+                            let lhs = self.parse_expr(Precedence::Lowest)?;
+                            self.next_token();
+                            self.next_token();
+                            let val = self.parse_expr(Precedence::Lowest)?;
+                            Ok(StmtKind::Assign(lhs, val, true))
+                        }
+                        _ => Err(ParseError::InvalidGlobal),
+                    }
+                }
+                TokenKind::Def => {
+                    self.next_token();
+                    let def = self.parse_fn_def()?;
+                    Ok(StmtKind::Func(def, true))
+                }
+                _ => Err(ParseError::InvalidGlobal),
             },
             TokenKind::Return => {
                 self.next_token();
@@ -226,7 +250,7 @@ impl Parser {
                 self.next_token();
                 self.next_token();
                 let rhs = self.parse_expr(Precedence::Lowest)?;
-                Ok(StmtKind::Assign(expr.clone(), rhs))
+                Ok(StmtKind::Assign(expr.clone(), rhs, false))
             }
             _ => Ok(lhs),
         }
@@ -718,8 +742,17 @@ mod tests {
         r#"x = "a""#,
         StmtKind::Assign(
             ExprKind::Ident(Identifier::new("x".into())),
-            ExprKind::Str("a".into())
+            ExprKind::Str("a".into()),
+            false
         ); "single assign"
+    )]
+    #[test_case(
+        r#"global x = "a""#,
+        StmtKind::Assign(
+            ExprKind::Ident(Identifier::new("x".into())),
+            ExprKind::Str("a".into()),
+            true
+        ); "single global assign"
     )]
     #[test_case(r#"null"#, StmtKind::Expr(ExprKind::Null); "null expr stmt")]
     #[test_case(
@@ -734,7 +767,8 @@ mod tests {
         r#"x = 1 == 2"#,
         StmtKind::Assign(
             ExprKind::Ident(Identifier::new("x".to_string())),
-            ExprKind::Infix(Box::new(ExprKind::Number(1.)), Token::new(TokenKind::EQ, "==".to_string()), Box::new(ExprKind::Number(2.)))
+            ExprKind::Infix(Box::new(ExprKind::Number(1.)), Token::new(TokenKind::EQ, "==".to_string()), Box::new(ExprKind::Number(2.))),
+            false
         ); "assign eq infix"
     )]
     #[test_case(
@@ -749,7 +783,8 @@ mod tests {
                     ExprKind::Number(0.)
                 )
             ),
-            ExprKind::Number(1.)
+            ExprKind::Number(1.),
+            false,
         ); "index assign"
     )]
     #[test_case(
@@ -812,8 +847,21 @@ mod tests {
                 vec![
                 ],
                 Block::default()
-            )
+            ),
+            false
         ); "fn definition"
+    )]
+    #[test_case(
+        r#"global def f() do end"#,
+        StmtKind::Func(
+            FuncDef::new(
+                Identifier::new("f".into()),
+                vec![
+                ],
+                Block::default()
+            ),
+            true
+        ); "global fn definition"
     )]
     #[test_case(
         r#"def f(a, b) do end"#,
@@ -825,7 +873,8 @@ mod tests {
                     FnParam::new(Identifier::new("b".into()), None)
                 ],
                 Block::default()
-            )
+            ),
+            false
         ); "fn def multi params"
     )]
     #[test_case(
@@ -837,7 +886,8 @@ mod tests {
                     FnParam::new(Identifier::new("a".into()), Some(ExprKind::Null))
                 ],
                 Block::default()
-            )
+            ),
+            false
         ); "fn def default param"
     )]
     #[test_case(

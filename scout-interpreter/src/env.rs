@@ -13,11 +13,27 @@ pub type EnvPointer = Arc<Mutex<Env>>;
 pub struct Env {
     pub store: HashMap<String, Arc<Object>>,
     outer: Mutex<Weak<Mutex<Env>>>,
+    pub globals: Vec<Identifier>,
 }
 
 impl Env {
     pub async fn add_outer(&mut self, env: EnvPointer) {
         *self.outer.get_mut() = Arc::downgrade(&env);
+    }
+
+    pub async fn inherit_globals(&mut self, other: EnvPointer) {
+        let inner = other.lock().await;
+        for global in &inner.globals {
+            // This should be safe because we only add to globals
+            // and store at the same time.
+            let val = inner.get(global).await.unwrap();
+            self.add_global(global, val.clone()).await;
+        }
+    }
+
+    pub async fn add_global(&mut self, id: &Identifier, obj: Arc<Object>) {
+        self.set(id, obj).await;
+        self.globals.push(id.clone());
     }
 
     pub fn get<'a>(&'a self, id: &'a Identifier) -> BoxFuture<'a, Option<Arc<Object>>> {

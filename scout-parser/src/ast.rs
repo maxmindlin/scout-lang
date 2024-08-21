@@ -16,12 +16,12 @@ pub struct Program {
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum StmtKind {
-    Assign(ExprKind, ExprKind),
+    Assign(ExprKind, ExprKind, bool),
     Crawl(CrawlLiteral),
     Expr(ExprKind),
     ForLoop(ForLoop),
     WhileLoop(ExprKind, Block),
-    Func(FuncDef),
+    Func(FuncDef, bool),
     Goto(ExprKind),
     IfElse(IfElseLiteral),
     Return(Option<ExprKind>),
@@ -330,7 +330,13 @@ impl std::fmt::Display for StmtKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         use StmtKind::*;
         match self {
-            Assign(lhs, rhs) => write!(f, "{lhs} = {rhs}"),
+            Assign(lhs, rhs, g) => {
+                if *g {
+                    write!(f, "global {lhs} = {rhs}")
+                } else {
+                    write!(f, "{lhs} = {rhs}")
+                }
+            }
             Crawl(lit) => {
                 write!(f, "crawl ")?;
 
@@ -353,7 +359,13 @@ impl std::fmt::Display for StmtKind {
                 )
             }
             WhileLoop(cond, block) => write!(f, "while {cond} do\n{block}end\n"),
-            Func(def) => write!(f, "{def}"),
+            Func(def, g) => {
+                if *g {
+                    write!(f, "global {def}")
+                } else {
+                    write!(f, "{def}")
+                }
+            }
             Goto(expr) => write!(f, "goto {expr}"),
             IfElse(lit) => {
                 writeln!(f, "if {} do\n{}", lit.if_lit.cond, lit.if_lit.block)?;
@@ -379,7 +391,7 @@ impl std::fmt::Display for StmtKind {
                 if let Some(catch) = c {
                     write!(f, "catch\n{catch}\n")?;
                 }
-                write!(f, "end\n")
+                writeln!(f, "end")
             }
             Use(expr) => write!(f, "use {expr}"),
         }

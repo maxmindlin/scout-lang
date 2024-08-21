@@ -57,6 +57,7 @@ pub enum TokenKind {
     And,
     Or,
     While,
+    Global,
 }
 
 impl TokenKind {
@@ -87,6 +88,7 @@ impl TokenKind {
             "throw" => Some(Throw),
             "and" => Some(And),
             "or" => Some(Or),
+            "global" => Some(Global),
             _ => None,
         }
     }

@@ -6,6 +6,10 @@ use serde_json::{json, Value};
 
 use crate::env::EnvPointer;
 
+pub trait ParseObj<T> {
+    fn parse_obj(&self) -> impl std::future::Future<Output = Result<T, String>> + Send;
+}
+
 #[derive(Debug)]
 pub enum Object {
     Null,
@@ -85,7 +89,7 @@ impl Object {
                     out.push_str(" }");
                     out
                 }
-                Str(s) => format!("\"{}\"", s),
+                Str(s) => format!("{}", s),
                 Node(_) => "Node".into(),
                 List(mutex) => {
                     let inner = mutex.lock().await;
@@ -248,5 +252,26 @@ pub fn json_to_obj(json: &Value) -> Arc<Object> {
             Arc::new(Object::Map(Mutex::new(map)))
         }
         Value::Number(n) => Arc::new(Object::Number(n.as_f64().unwrap_or(f64::NAN))),
+    }
+}
+
+impl ParseObj<Vec<Arc<Object>>> for Object {
+    async fn parse_obj(&self) -> Result<Vec<Arc<Object>>, String> {
+        match self {
+            Object::List(m) => {
+                let inner = m.lock().await.clone();
+                Ok(inner)
+            }
+            _ => Err("cant turn this type into a vec".to_string()),
+        }
+    }
+}
+
+impl ParseObj<String> for Object {
+    async fn parse_obj(&self) -> Result<String, String> {
+        match self {
+            Object::Str(s) => Ok(s.clone()),
+            _ => Err("cant turn this type into a string".to_string()),
+        }
     }
 }

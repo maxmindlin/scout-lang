@@ -213,7 +213,7 @@ fn eval_statement<'a>(
                 }
                 Ok(Arc::new(Object::Null))
             }
-            StmtKind::Assign(lhs, expr) => {
+            StmtKind::Assign(lhs, expr, global) => {
                 let val = eval_expression(expr, crawler, env.clone(), results.clone()).await?;
                 match lhs {
                     ExprKind::Infix(lhs, t, rhs) if t.kind == TokenKind::LBracket => {
@@ -243,7 +243,11 @@ fn eval_statement<'a>(
                         }
                     }
                     ExprKind::Ident(ident) => {
-                        env.lock().await.set(ident, val).await;
+                        if !global {
+                            env.lock().await.set(ident, val).await;
+                        } else {
+                            env.lock().await.add_global(ident, val).await;
+                        }
                         Ok(Arc::new(Object::Null))
                     }
                     _ => Err(EvalError::InvalidAssign),
@@ -287,9 +291,13 @@ fn eval_statement<'a>(
 
                 Ok(Arc::new(Object::Null))
             }
-            StmtKind::Func(def) => {
+            StmtKind::Func(def, global) => {
                 let lit = Object::Fn(def.params.clone(), def.body.clone());
-                env.lock().await.set(&def.ident, Arc::new(lit)).await;
+                if !global {
+                    env.lock().await.set(&def.ident, Arc::new(lit)).await;
+                } else {
+                    env.lock().await.add_global(&def.ident, Arc::new(lit)).await;
+                }
                 Ok(Arc::new(Object::Null))
             }
             StmtKind::Return(rv) => match rv {
@@ -330,7 +338,9 @@ fn eval_use_chain<'a>(
             let mut parser = Parser::new(lex);
             match parser.parse_program() {
                 Ok(prgm) => {
-                    let module_env = Arc::new(Mutex::new(Env::default()));
+                    let mut new_env = Env::default();
+                    new_env.inherit_globals(env.clone()).await;
+                    let module_env = Arc::new(Mutex::new(new_env));
                     eval(
                         NodeKind::Program(prgm),
                         crawler,
@@ -359,7 +369,9 @@ fn eval_use_chain<'a>(
             } else {
                 dir_name_raw
             };
-            let mod_env = Arc::new(Mutex::new(Env::default()));
+            let mut new_env = Env::default();
+            new_env.inherit_globals(env.clone()).await;
+            let mod_env = Arc::new(Mutex::new(new_env));
             for entry in path.read_dir().unwrap() {
                 if let Ok(entry) = entry {
                     let filename = entry
