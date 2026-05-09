@@ -1,0 +1,37 @@
+// Example 1: List all comments and posters from TipidPC thread
+// URL: https://tipidpc.com/topics/309057?page=198
+
+goto "https://tipidpc.com/topics/309057?page=198"
+
+// The page structure uses:
+// - Each post is in a div with id="post-XXXXXX"
+// - Username is in: a[href^="/users/"]
+// - Comment content is in: div with id="post-body-XXXXXX"
+
+// Find all posts (excluding the original post which has different styling)
+for post in $$"div[id^='post-']" do
+    // Extract the post ID for finding the content
+    postId = post |> attr("id")
+    
+    // Get the username - it's in the header section
+    username = $(post)"a[href^='/users/']" |> textContent() |> trim()
+    
+    // Get the comment text from the post body
+    // The ID pattern is "post-body-XXXXXX"
+    comment = $(post)"div[id^='post-body-']" |> textContent() |> trim()
+    
+    // Get the timestamp
+    timestamp = $(post)"span" |> textContent() |> trim()
+    
+    // Only scrape if we have actual content
+    if comment != "" do
+        scrape {
+            username: username,
+            comment: comment,
+            timestamp: timestamp,
+        }
+    end
+end
+
+// Display results
+results()

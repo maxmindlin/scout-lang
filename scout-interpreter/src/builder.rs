@@ -1,11 +1,17 @@
 use get_port::Ops;
 
-use crate::{env::EnvPointer, eval::ScrapeResultsPtr, EnvVars, Interpreter};
+use crate::{
+    browser::{AnyBrowserAdapter, Chrome, ChromeAdapter, Firefox, FirefoxAdapter},
+    env::EnvPointer,
+    eval::ScrapeResultsPtr,
+    DriverProcess, EnvVars, Interpreter,
+};
 
 #[derive(Debug)]
 pub enum BuilderError {
     BrowserStartup(String),
     EnvError(String),
+    InvalidBrowser(String),
 }
 
 #[derive(Default)]
@@ -37,43 +43,35 @@ impl InterpreterBuilder {
         let port = env_vars
             .port()
             .unwrap_or_else(|| get_port::tcp::TcpPort::any("127.0.0.1").unwrap() as usize);
-        let child = crate::GeckDriverProc::new(port);
+        let browser_type = std::env::var("SCOUT_BROWSER")
+            .unwrap_or_else(|_| "firefox".to_string())
+            .to_lowercase();
+
+        let adapter: Box<dyn AnyBrowserAdapter> = match browser_type.as_str() {
+            "firefox" => Box::new(FirefoxAdapter::new(Firefox)),
+            "chrome" => Box::new(ChromeAdapter::new(Chrome)),
+            other => {
+                return Err(BuilderError::InvalidBrowser(format!(
+                    "unsupported browser: {other}. supported: firefox, chrome"
+                )))
+            }
+        };
+
+        adapter.start(port)?;
         let crawler = match self.crawler {
-            Some(c) => Ok(c),
-            None => new_crawler(&env_vars, port).await,
-        }?;
+            Some(c) => c,
+            None => adapter.connect(port, &env_vars).await?,
+        };
 
         let interpreter = Interpreter::new(
             self.env.unwrap_or_default(),
             self.results.unwrap_or_default(),
             crawler,
-            child,
+            DriverProcess(adapter),
         );
 
         Ok(interpreter)
     }
-}
-
-async fn new_crawler(env_vars: &EnvVars, port: usize) -> Result<fantoccini::Client, BuilderError> {
-    let mut caps = serde_json::map::Map::new();
-    if !env_vars.scout_debug {
-        let opts = serde_json::json!({ "args": ["--headless"] });
-        caps.insert("moz:firefoxOptions".into(), opts);
-    }
-    if let Some(proxy) = env_vars.scout_proxy.clone() {
-        let opt = serde_json::json!({
-            "proxyType": "manual",
-            "httpProxy": proxy,
-        });
-        caps.insert("proxy".into(), opt);
-    }
-    let conn_url = format!("http://localhost:{}", port);
-    let crawler = fantoccini::ClientBuilder::native()
-        .capabilities(caps)
-        .connect(&conn_url)
-        .await
-        .map_err(|e| BuilderError::BrowserStartup(e.to_string()))?;
-    Ok(crawler)
 }
 
 impl std::fmt::Display for BuilderError {
@@ -81,6 +79,7 @@ impl std::fmt::Display for BuilderError {
         match self {
             BuilderError::BrowserStartup(e) => write!(f, "{}", e),
             BuilderError::EnvError(e) => write!(f, "{}", e),
+            BuilderError::InvalidBrowser(e) => write!(f, "{}", e),
         }
     }
 }

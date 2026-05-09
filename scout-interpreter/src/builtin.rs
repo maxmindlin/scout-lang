@@ -51,6 +51,14 @@ pub enum BuiltinKind {
     ToJson,
     HttpRequest,
     SetViewport,
+    Trim,
+    TrimStart,
+    TrimEnd,
+    ToLowerCase,
+    ToUpperCase,
+    Split,
+    Replace,
+    Attr,
 }
 
 impl BuiltinKind {
@@ -79,6 +87,14 @@ impl BuiltinKind {
             "toJson" => Some(ToJson),
             "httpRequest" => Some(HttpRequest),
             "setViewport" => Some(SetViewport),
+            "trim" => Some(Trim),
+            "trimStart" => Some(TrimStart),
+            "trimEnd" => Some(TrimEnd),
+            "toLowerCase" => Some(ToLowerCase),
+            "toUpperCase" => Some(ToUpperCase),
+            "split" => Some(Split),
+            "replace" => Some(Replace),
+            "attr" => Some(Attr),
             _ => None,
         }
     }
@@ -221,6 +237,94 @@ impl BuiltinKind {
                 if let Object::Str(s) = &*args[0] {
                     let is_whitespace = s.chars().all(|c| c.is_whitespace());
                     Ok(Arc::new(Object::Boolean(is_whitespace)))
+                } else {
+                    Err(EvalError::InvalidFnParams)
+                }
+            }
+            Trim => {
+                assert_param_len!(args, 1);
+                if let Object::Str(s) = &*args[0] {
+                    let trimmed = s.trim();
+                    Ok(Arc::new(Object::Str(trimmed.to_string())))
+                } else {
+                    Err(EvalError::InvalidFnParams)
+                }
+            }
+            TrimStart => {
+                assert_param_len!(args, 1);
+                if let Object::Str(s) = &*args[0] {
+                    let trimmed = s.trim_start();
+                    Ok(Arc::new(Object::Str(trimmed.to_string())))
+                } else {
+                    Err(EvalError::InvalidFnParams)
+                }
+            }
+            TrimEnd => {
+                assert_param_len!(args, 1);
+                if let Object::Str(s) = &*args[0] {
+                    let trimmed = s.trim_end();
+                    Ok(Arc::new(Object::Str(trimmed.to_string())))
+                } else {
+                    Err(EvalError::InvalidFnParams)
+                }
+            }
+            ToLowerCase => {
+                assert_param_len!(args, 1);
+                if let Object::Str(s) = &*args[0] {
+                    let lowercased = s.to_lowercase();
+                    Ok(Arc::new(Object::Str(lowercased)))
+                } else {
+                    Err(EvalError::InvalidFnParams)
+                }
+            }
+            ToUpperCase => {
+                assert_param_len!(args, 1);
+                if let Object::Str(s) = &*args[0] {
+                    let uppercased = s.to_uppercase();
+                    Ok(Arc::new(Object::Str(uppercased)))
+                } else {
+                    Err(EvalError::InvalidFnParams)
+                }
+            }
+            Split => {
+                assert_param_len!(args, 2);
+                match (&*args[0], &*args[1]) {
+                    (Object::Str(s), Object::Str(sep)) => {
+                        let parts: Vec<Arc<Object>> = s.split(sep)
+                            .map(|part| Arc::new(Object::Str(part.to_string())))
+                            .collect();
+                        Ok(Arc::new(Object::List(Mutex::new(parts))))
+                    }
+                    _ => Err(EvalError::InvalidFnParams),
+                }
+            }
+            Replace => {
+                assert_param_len!(args, 3);
+                match (&*args[0], &*args[1], &*args[2]) {
+                    (Object::Str(s), Object::Str(from), Object::Str(to)) => {
+                        let replaced = s.replace(from, to);
+                        Ok(Arc::new(Object::Str(replaced)))
+                    }
+                    _ => Err(EvalError::InvalidFnParams),
+                }
+            }
+            Attr => {
+                assert_param_len!(args, 2);
+                if let Object::Str(attr_name) = &*args[1] {
+                    let attr_name = attr_name.clone();
+                    apply_elem_fn(&args[0], move |elem| {
+                        let attr_name = attr_name.clone();
+                        async move {
+                            Object::Str(
+                                elem.prop(&attr_name)
+                                    .await
+                                    .unwrap_or(Option::None)
+                                    .unwrap_or("".into()),
+                            )
+                        }
+                        .boxed()
+                    })
+                    .await
                 } else {
                     Err(EvalError::InvalidFnParams)
                 }
@@ -408,6 +512,8 @@ async fn apply_elem_fn(
             }
             Ok(Arc::new(Object::List(Mutex::new(res))))
         }
+        // Handle null/empty selectors gracefully by returning empty string
+        Object::Null => Ok(Arc::new(Object::Str("".to_string()))),
         _ => Err(EvalError::InvalidFnParams),
     }
 }

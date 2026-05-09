@@ -1,0 +1,24 @@
+// ecommerce_scraper_template.sct
+// Sample platter-rs template for scraping all sections of https://webscraper.io/test-sites/e-commerce/static
+// Render with platter-rs, e.g., cargo run -- render this.sct --var category="computers/laptops" --var page=1
+// Parameters: base_url, category, page, max_pages, product_selector, name_selector, price_selector, description_selector, rating_selector, max_items, debug, scrape_ratings
+
+
+// Note: Range syntax (1..3) is not yet implemented
+// For now, just scrape one page
+goto "https://webscraper.io/test-sites/e-commerce/static/computers/laptops?page=1"
+
+// Find products on the page
+for product in $$".col-md-4" do
+    name = $(product)"h4 > a" |> textContent() |> trim()
+    price = $(product)"h5" |> textContent() |> trim()
+    description = $(product)"p" |> textContent() |> trim()
+    rating = $(product)".ratings" |> attr("data-rating") |> trim()
+
+    scrape {
+        name: name,
+        price: price,
+        description: description,
+        rating: rating,
+    }
+end

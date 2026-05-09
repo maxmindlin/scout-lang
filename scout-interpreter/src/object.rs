@@ -72,7 +72,7 @@ impl Object {
         }
     }
 
-    pub fn to_display(&self) -> BoxFuture<String> {
+    pub fn to_display(&self) -> BoxFuture<'_, String> {
         use Object::*;
         async move {
             match self {
@@ -223,7 +223,7 @@ fn vec_to_json(v: &Mutex<Vec<Arc<Object>>>) -> BoxFuture<'_, Value> {
 
 pub fn obj_map_to_json(
     map: &HashMap<Identifier, Arc<Object>>,
-) -> BoxFuture<serde_json::Map<String, Value>> {
+) -> BoxFuture<'_, serde_json::Map<String, Value>> {
     async move {
         let mut out = serde_json::Map::new();
         for (ident, obj) in map.iter() {
